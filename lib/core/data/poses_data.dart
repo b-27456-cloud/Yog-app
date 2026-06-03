@@ -1,0 +1,167 @@
+import 'package:flutter/material.dart';
+import '../models/pose_model.dart';
+
+final List<PoseModel> posesData = [
+  PoseModel(
+    id: 'warrior_2',
+    name: 'Warrior II',
+    difficulty: 'Beginner',
+    description: 'Warrior II (Virabhadrasana II) is a powerful standing pose that builds strength and stability. It opens the hips and chest while improving concentration, balance, and overall body awareness.',
+    durationMinutes: 20,
+    calories: 180,
+    icon: Icons.accessibility_new,
+    benefits: [
+      'Strengthens legs, glutes, and core',
+      'Improves hip flexibility and opening',
+      'Enhances focus and mental clarity',
+      'Builds overall stamina and endurance',
+    ],
+    steps: [
+      {'title': 'Stand in Mountain Pose', 'desc': 'Begin at the top of your mat with feet hip-width apart and arms at your sides.'},
+      {'title': 'Step your feet wide apart', 'desc': 'Step or jump your feet 3–4 feet apart, then turn your right foot out 90° and left foot in 15°.'},
+      {'title': 'Bend your front knee', 'desc': 'Bend your right knee to 90°, aligning it over the ankle. Keep your back leg straight.'},
+      {'title': 'Extend your arms', 'desc': 'Raise both arms to shoulder height, parallel to the floor. Gaze over your right fingertips.'},
+    ],
+  ),
+  PoseModel(
+    id: 'tree_pose',
+    name: 'Tree Pose',
+    difficulty: 'Beginner',
+    description: 'Tree Pose (Vrksasana) is a classic balancing posture that strengthens the ankles and calves while improving focus and inner calm. It teaches stability and concentration.',
+    durationMinutes: 15,
+    calories: 120,
+    icon: Icons.park_outlined,
+    benefits: [
+      'Improves balance and coordination',
+      'Strengthens ankles, calves, and thighs',
+      'Stretches the groin and inner thighs',
+      'Calms the mind and reduces anxiety',
+    ],
+    steps: [
+      {'title': 'Stand in Mountain Pose', 'desc': 'Start standing tall with your feet together and weight evenly distributed.'},
+      {'title': 'Shift weight to one foot', 'desc': 'Slowly shift your weight onto your left foot and lift your right foot off the mat.'},
+      {'title': 'Place the foot on the inner thigh', 'desc': 'Press the sole of your right foot against your left inner thigh, toes pointing down.'},
+      {'title': 'Raise your arms', 'desc': 'Bring your palms together at the chest or extend arms overhead like branches of a tree.'},
+    ],
+  ),
+  PoseModel(
+    id: 'downward_dog',
+    name: 'Downward Dog',
+    difficulty: 'Beginner',
+    description: 'An inversion that stretches the hamstrings and calves while strengthening the shoulders. It rejuvenates the body and creates length in the spine.',
+    durationMinutes: 10,
+    calories: 100,
+    icon: Icons.pets,
+    benefits: [
+      'Stretches hamstrings',
+      'Strengthens shoulders',
+      'Calms the mind'
+    ],
+    steps: [
+      {'title': 'Hands and Knees', 'desc': 'Start on your hands and knees.'},
+      {'title': 'Lift Hips', 'desc': 'Tuck toes and lift your hips up and back.'},
+      {'title': 'Straighten Legs', 'desc': 'Slowly straighten your legs as much as possible.'},
+      {'title': 'Press Heels', 'desc': 'Press your heels toward the floor.'},
+    ],
+  ),
+  PoseModel(
+    id: 'mountain_pose',
+    name: 'Mountain Pose',
+    difficulty: 'Beginner',
+    description: 'The foundation for all standing poses. It improves posture, grounds you, and cultivates body awareness.',
+    durationMinutes: 5,
+    calories: 30,
+    icon: Icons.terrain,
+    benefits: [
+      'Improves posture',
+      'Strengthens thighs',
+      'Increases awareness'
+    ],
+    steps: [
+      {'title': 'Stand Tall', 'desc': 'Stand with feet together.'},
+      {'title': 'Engage Legs', 'desc': 'Engage your quadriceps and lift your kneecaps.'},
+      {'title': 'Relax Shoulders', 'desc': 'Roll your shoulders down and back.'},
+      {'title': 'Breathe', 'desc': 'Breathe deeply and hold.'},
+    ],
+  ),
+  PoseModel(
+    id: 'cobra_pose',
+    name: 'Cobra Pose',
+    difficulty: 'Beginner',
+    description: 'A gentle backbend that stretches the chest and abdomen while strengthening the spine.',
+    durationMinutes: 10,
+    calories: 80,
+    icon: Icons.monitor_heart_outlined,
+    benefits: [
+      'Strengthens spine',
+      'Stretches chest',
+      'Improves posture'
+    ],
+    steps: [
+      {'title': 'Lie Down', 'desc': 'Lie on your stomach with hands under shoulders.'},
+      {'title': 'Press Up', 'desc': 'Press into your hands and lift your chest.'},
+      {'title': 'Keep Elbows Bent', 'desc': 'Keep your elbows slightly bent and close to your body.'},
+      {'title': 'Look Up', 'desc': 'Look slightly upwards.'},
+    ],
+  ),
+  PoseModel(
+    id: 'child_pose',
+    name: 'Child\'s Pose',
+    difficulty: 'Beginner',
+    description: 'A resting pose that gently stretches the hips, thighs, and ankles while calming the mind.',
+    durationMinutes: 15,
+    calories: 50,
+    icon: Icons.child_care,
+    benefits: [
+      'Stretches hips',
+      'Calms the mind',
+      'Relieves tension'
+    ],
+    steps: [
+      {'title': 'Kneel', 'desc': 'Kneel on the floor with toes together and knees apart.'},
+      {'title': 'Sit Back', 'desc': 'Sit back on your heels.'},
+      {'title': 'Fold Forward', 'desc': 'Fold forward and rest your forehead on the floor.'},
+      {'title': 'Extend Arms', 'desc': 'Extend your arms forward or alongside your body.'},
+    ],
+  ),
+  PoseModel(
+    id: 'chair_pose',
+    name: 'Chair Pose',
+    difficulty: 'Intermediate',
+    description: 'A powerful pose that strengthens the thighs and ankles while opening the chest.',
+    durationMinutes: 15,
+    calories: 150,
+    icon: Icons.chair_alt_outlined,
+    benefits: [
+      'Strengthens thighs',
+      'Opens chest',
+      'Builds heat'
+    ],
+    steps: [
+      {'title': 'Stand Tall', 'desc': 'Start in Mountain pose.'},
+      {'title': 'Bend Knees', 'desc': 'Bend your knees and sit back as if in a chair.'},
+      {'title': 'Raise Arms', 'desc': 'Raise your arms alongside your ears.'},
+      {'title': 'Hold', 'desc': 'Hold the pose while breathing deeply.'},
+    ],
+  ),
+  PoseModel(
+    id: 'pigeon_pose',
+    name: 'Pigeon Pose',
+    difficulty: 'Intermediate',
+    description: 'A deep hip opener that increases flexibility and relieves tension in the lower back.',
+    durationMinutes: 20,
+    calories: 100,
+    icon: Icons.flight_takeoff,
+    benefits: [
+      'Opens hips',
+      'Relieves lower back tension',
+      'Increases flexibility'
+    ],
+    steps: [
+      {'title': 'Downward Dog', 'desc': 'Start in Downward Dog.'},
+      {'title': 'Bring Leg Forward', 'desc': 'Bring your right knee forward behind your right wrist.'},
+      {'title': 'Lower Hips', 'desc': 'Lower your hips to the floor.'},
+      {'title': 'Fold Forward', 'desc': 'Optional: fold forward over your front leg.'},
+    ],
+  ),
+];
