@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/glass_card.dart';
+import '../../core/models/settings_model.dart';
+import '../auth/auth_provider.dart';
+import 'settings_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -12,10 +16,51 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  final SettingsService _settingsService = SettingsService();
+
   bool _pushNotifications = true;
   bool _soundEffects = true;
   bool _hapticFeedback = false;
   bool _mirrorMode = false;
+
+  Future<void> _updateSettingOptimistically({
+    bool? pushNotifications,
+    bool? hapticFeedback,
+  }) async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userId = authProvider.user?.id;
+    if (userId == null) return;
+
+    // Apply optimistic update
+    setState(() {
+      if (pushNotifications != null) _pushNotifications = pushNotifications;
+      if (hapticFeedback != null) _hapticFeedback = hapticFeedback;
+    });
+
+    final newSettings = SettingsModel(
+      accessibility: AccessibilitySettings(
+        hapticFeedback: _hapticFeedback,
+      ),
+      settings: AppSettings(
+        notifications: _pushNotifications,
+      ),
+    );
+
+    try {
+      await _settingsService.updateSettings(userId, newSettings);
+    } catch (e) {
+      if (mounted) {
+        // Revert update on failure
+        setState(() {
+          if (pushNotifications != null) _pushNotifications = !pushNotifications;
+          if (hapticFeedback != null) _hapticFeedback = !hapticFeedback;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,30 +97,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Column(
                   children: [
                     // Profile tile
-                    ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                      leading: const CircleAvatar(
-                        radius: 22,
-                        backgroundColor: AppColors.kPrimary,
-                        child: Icon(Icons.person, color: Colors.white),
-                      ),
-                      title: Text(
-                        "Alex Johnson",
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.kNavy,
-                        ),
-                      ),
-                      subtitle: Text(
-                        "alex@email.com",
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.kNavy.withOpacity(0.65),
-                        ),
-                      ),
-                      trailing: Icon(Icons.chevron_right, color: AppColors.kNavy.withOpacity(0.65)),
-                      onTap: () {},
+                    Consumer<AuthProvider>(
+                      builder: (context, authProvider, child) {
+                        final user = authProvider.user;
+                        final name = user != null 
+                            ? '${user.firstName} ${user.lastName}'.trim() 
+                            : 'Guest User';
+                        final email = user?.email ?? '';
+                        
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                          leading: const CircleAvatar(
+                            radius: 22,
+                            backgroundColor: AppColors.kPrimary,
+                            child: Icon(Icons.person, color: Colors.white),
+                          ),
+                          title: Text(
+                            name.isNotEmpty ? name : "Guest User",
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.kNavy,
+                            ),
+                          ),
+                          subtitle: Text(
+                            email,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.kNavy.withOpacity(0.65),
+                            ),
+                          ),
+                          trailing: Icon(Icons.chevron_right, color: AppColors.kNavy.withOpacity(0.65)),
+                          onTap: () {},
+                        );
+                      },
                     ),
                     _buildDivider(),
                     _buildNavTile(Icons.lock_outline, "Change Password", null, () {}),
@@ -100,7 +155,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Icons.notifications_outlined,
                       "Push Notifications",
                       _pushNotifications,
-                      (v) => setState(() => _pushNotifications = v),
+                      (v) => _updateSettingOptimistically(pushNotifications: v),
                     ),
                     _buildDivider(),
                     _buildSwitchTile(
@@ -114,7 +169,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Icons.vibration,
                       "Haptic Feedback",
                       _hapticFeedback,
-                      (v) => setState(() => _hapticFeedback = v),
+                      (v) => _updateSettingOptimistically(hapticFeedback: v),
                     ),
                     _buildDivider(),
                     // Dark mode — disabled (always on)
@@ -221,6 +276,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       trailing: Icon(Icons.chevron_right, color: AppColors.kNavy.withOpacity(0.50), size: 20),
                       onTap: () {},
+                    ),
+                    _buildDivider(),
+                    ListTile(
+                      leading: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.logout, color: Colors.redAccent, size: 20),
+                      ),
+                      title: Text(
+                        "Logout",
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.redAccent,
+                        ),
+                      ),
+                      onTap: () async {
+                        await Provider.of<AuthProvider>(context, listen: false).logout();
+                        if (mounted) {
+                          context.go('/login');
+                        }
+                      },
                     ),
                   ],
                 ),

@@ -6,7 +6,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/widgets/glass_card.dart';
 
 class SessionScreen extends StatefulWidget {
-  const SessionScreen({Key? key}) : super(key: key);
+  final String poseId;
+  const SessionScreen({Key? key, required this.poseId}) : super(key: key);
 
   @override
   State<SessionScreen> createState() => _SessionScreenState();

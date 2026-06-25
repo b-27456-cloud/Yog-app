@@ -4,12 +4,15 @@ import '../models/pose_model.dart';
 final List<PoseModel> posesData = [
   PoseModel(
     id: 'warrior_2',
+    slug: 'warrior-ii',
     name: 'Warrior II',
     difficulty: 'Beginner',
     description: 'Warrior II (Virabhadrasana II) is a powerful standing pose that builds strength and stability. It opens the hips and chest while improving concentration, balance, and overall body awareness.',
     durationMinutes: 20,
     calories: 180,
     icon: Icons.accessibility_new,
+    targetAreas: ['legs', 'hips', 'chest'],
+    contraindications: ['Recent knee injury'],
     benefits: [
       'Strengthens legs, glutes, and core',
       'Improves hip flexibility and opening',
@@ -25,12 +28,15 @@ final List<PoseModel> posesData = [
   ),
   PoseModel(
     id: 'tree_pose',
+    slug: 'tree-pose',
     name: 'Tree Pose',
     difficulty: 'Beginner',
     description: 'Tree Pose (Vrksasana) is a classic balancing posture that strengthens the ankles and calves while improving focus and inner calm. It teaches stability and concentration.',
     durationMinutes: 15,
     calories: 120,
     icon: Icons.park_outlined,
+    targetAreas: ['legs', 'core', 'ankles'],
+    contraindications: ['Low blood pressure'],
     benefits: [
       'Improves balance and coordination',
       'Strengthens ankles, calves, and thighs',
@@ -46,12 +52,15 @@ final List<PoseModel> posesData = [
   ),
   PoseModel(
     id: 'downward_dog',
+    slug: 'downward-facing-dog',
     name: 'Downward Dog',
     difficulty: 'Beginner',
     description: 'An inversion that stretches the hamstrings and calves while strengthening the shoulders. It rejuvenates the body and creates length in the spine.',
     durationMinutes: 10,
     calories: 100,
     icon: Icons.pets,
+    targetAreas: ['hamstrings', 'calves', 'shoulders'],
+    contraindications: ['Carpal tunnel syndrome'],
     benefits: [
       'Stretches hamstrings',
       'Strengthens shoulders',
@@ -66,12 +75,15 @@ final List<PoseModel> posesData = [
   ),
   PoseModel(
     id: 'mountain_pose',
+    slug: 'mountain-pose',
     name: 'Mountain Pose',
     difficulty: 'Beginner',
     description: 'The foundation for all standing poses. It improves posture, grounds you, and cultivates body awareness.',
     durationMinutes: 5,
     calories: 30,
     icon: Icons.terrain,
+    targetAreas: ['whole body', 'core'],
+    contraindications: [],
     benefits: [
       'Improves posture',
       'Strengthens thighs',
@@ -86,12 +98,15 @@ final List<PoseModel> posesData = [
   ),
   PoseModel(
     id: 'cobra_pose',
+    slug: 'cobra-pose',
     name: 'Cobra Pose',
     difficulty: 'Beginner',
     description: 'A gentle backbend that stretches the chest and abdomen while strengthening the spine.',
     durationMinutes: 10,
     calories: 80,
     icon: Icons.monitor_heart_outlined,
+    targetAreas: ['back', 'chest', 'shoulders'],
+    contraindications: ['Back injury'],
     benefits: [
       'Strengthens spine',
       'Stretches chest',
@@ -106,12 +121,15 @@ final List<PoseModel> posesData = [
   ),
   PoseModel(
     id: 'child_pose',
+    slug: 'childs-pose',
     name: 'Child\'s Pose',
     difficulty: 'Beginner',
     description: 'A resting pose that gently stretches the hips, thighs, and ankles while calming the mind.',
     durationMinutes: 15,
     calories: 50,
     icon: Icons.child_care,
+    targetAreas: ['back', 'hips', 'thighs'],
+    contraindications: ['Knee injury'],
     benefits: [
       'Stretches hips',
       'Calms the mind',
@@ -126,12 +144,15 @@ final List<PoseModel> posesData = [
   ),
   PoseModel(
     id: 'chair_pose',
+    slug: 'chair-pose',
     name: 'Chair Pose',
     difficulty: 'Intermediate',
     description: 'A powerful pose that strengthens the thighs and ankles while opening the chest.',
     durationMinutes: 15,
     calories: 150,
     icon: Icons.chair_alt_outlined,
+    targetAreas: ['thighs', 'chest'],
+    contraindications: [],
     benefits: [
       'Strengthens thighs',
       'Opens chest',
@@ -146,12 +167,15 @@ final List<PoseModel> posesData = [
   ),
   PoseModel(
     id: 'pigeon_pose',
+    slug: 'pigeon-pose',
     name: 'Pigeon Pose',
     difficulty: 'Intermediate',
     description: 'A deep hip opener that increases flexibility and relieves tension in the lower back.',
     durationMinutes: 20,
     calories: 100,
     icon: Icons.flight_takeoff,
+    targetAreas: ['hips', 'lower back'],
+    contraindications: ['Knee injury'],
     benefits: [
       'Opens hips',
       'Relieves lower back tension',

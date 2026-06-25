@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../auth/auth_provider.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -37,11 +39,20 @@ class _SplashScreenState extends State<SplashScreen>
 
   Future<void> _checkLoginStatus() async {
     final prefs = await SharedPreferences.getInstance();
-    final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+    final hasToken = prefs.getString('auth_token') != null;
 
     if (mounted) {
-      if (isLoggedIn) {
-        context.go('/home');
+      if (hasToken) {
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final isValidSession = await authProvider.checkSession();
+        if (mounted) {
+          if (isValidSession) {
+            context.go('/home');
+          } else {
+            // Session expired or invalid, prompt to login again
+            context.go('/login');
+          }
+        }
       } else {
         context.go('/onboarding');
       }

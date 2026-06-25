@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../theme/app_colors.dart';
+import 'pose_selection_sheet.dart';
 
 class GlassBottomNav extends StatelessWidget {
   const GlassBottomNav({Key? key}) : super(key: key);
@@ -24,7 +25,7 @@ class GlassBottomNav extends StatelessWidget {
         context.go('/explore');
         break;
       case 2:
-        context.push('/camera');
+        PoseSelectionSheet.show(context);
         break;
       case 3:
         context.go('/progress');

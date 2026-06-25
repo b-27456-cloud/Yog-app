@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/glass_card.dart';
+import 'package:provider/provider.dart';
+import 'auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -12,7 +14,16 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -84,8 +95,10 @@ class _LoginScreenState extends State<LoginScreen> {
                               children: [
                                 // Email Field
                                 TextField(
+                                  controller: _emailController,
                                   style: const TextStyle(color: Colors.white),
                                   cursorColor: AppColors.kSkyBlue,
+                                  keyboardType: TextInputType.emailAddress,
                                   decoration: InputDecoration(
                                     filled: true,
                                     fillColor: Colors.white.withOpacity(0.12),
@@ -114,6 +127,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 const SizedBox(height: 16),
                                 // Password Field
                                 TextField(
+                                  controller: _passwordController,
                                   obscureText: _obscurePassword,
                                   style: const TextStyle(color: Colors.white),
                                   cursorColor: AppColors.kSkyBlue,
@@ -172,35 +186,70 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                                 const SizedBox(height: 24),
                                 // Sign In Button
-                                GestureDetector(
-                                  onTap: () {
-                                    context.go('/home');
-                                  },
-                                  child: Container(
-                                    width: double.infinity,
-                                    height: 52,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.kPrimary,
-                                      borderRadius: BorderRadius.circular(14),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: AppColors.kPrimary.withOpacity(0.35),
-                                          blurRadius: 16,
-                                          offset: const Offset(0, 6),
+                                Consumer<AuthProvider>(
+                                  builder: (context, authProvider, child) {
+                                    return Column(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [
+                                        if (authProvider.errorMessage != null) ...[
+                                          Text(
+                                            authProvider.errorMessage!,
+                                            style: const TextStyle(color: Colors.redAccent, fontSize: 13),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                          const SizedBox(height: 12),
+                                        ],
+                                        GestureDetector(
+                                          onTap: authProvider.isLoading
+                                              ? null
+                                              : () async {
+                                                  final email = _emailController.text.trim();
+                                                  final password = _passwordController.text.trim();
+                                                  if (email.isEmpty || password.isEmpty) return;
+                                                  
+                                                  final success = await authProvider.login(email, password);
+                                                  if (success && mounted) {
+                                                    context.go('/home');
+                                                  }
+                                                },
+                                          child: Container(
+                                            width: double.infinity,
+                                            height: 52,
+                                            decoration: BoxDecoration(
+                                              color: authProvider.isLoading ? Colors.grey : AppColors.kPrimary,
+                                              borderRadius: BorderRadius.circular(14),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: AppColors.kPrimary.withOpacity(0.35),
+                                                  blurRadius: 16,
+                                                  offset: const Offset(0, 6),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Center(
+                                              child: authProvider.isLoading
+                                                  ? const SizedBox(
+                                                      width: 24,
+                                                      height: 24,
+                                                      child: CircularProgressIndicator(
+                                                        color: Colors.white,
+                                                        strokeWidth: 2,
+                                                      ),
+                                                    )
+                                                  : Text(
+                                                      "Sign In",
+                                                      style: GoogleFonts.poppins(
+                                                        fontSize: 16,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
+                                            ),
+                                          ),
                                         ),
                                       ],
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        "Sign In",
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
+                                    );
+                                  },
                                 ),
                               ],
                             ),

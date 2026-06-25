@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import 'features/splash/splash_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
@@ -13,8 +14,8 @@ import 'features/profile/profile_screen.dart';
 import 'features/pose_detail/pose_detail_screen.dart';
 import 'features/session/session_screen.dart';
 import 'features/settings/settings_screen.dart';
+import 'features/auth/auth_provider.dart';
 import 'core/theme/app_theme.dart';
-import 'core/data/poses_data.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -48,10 +49,14 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/camera',
-      pageBuilder: (context, state) => const MaterialPage(
-        fullscreenDialog: true,
-        child: CameraScreen(),
-      ),
+      pageBuilder: (context, state) {
+        final Map<String, dynamic> extra = state.extra as Map<String, dynamic>? ?? {};
+        final poseId = extra['poseId'] as String? ?? 'warrior_2';
+        return MaterialPage(
+          fullscreenDialog: true,
+          child: CameraScreen(poseId: poseId),
+        );
+      },
     ),
     GoRoute(
       path: '/progress',
@@ -64,17 +69,20 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/pose-detail/:id',
       pageBuilder: (context, state) {
-        final id = state.pathParameters['id'];
-        final pose = posesData.firstWhere((p) => p.id == id, orElse: () => posesData.first);
-        return _buildPageWithTransition(PoseDetailScreen(pose: pose), state);
+        final id = state.pathParameters['id']!;
+        return _buildPageWithTransition(PoseDetailScreen(poseId: id), state);
       },
     ),
     GoRoute(
       path: '/session',
-      pageBuilder: (context, state) => const MaterialPage(
-        fullscreenDialog: true,
-        child: SessionScreen(),
-      ),
+      pageBuilder: (context, state) {
+        final Map<String, dynamic> extra = state.extra as Map<String, dynamic>? ?? {};
+        final poseId = extra['poseId'] as String? ?? 'warrior_2';
+        return MaterialPage(
+          fullscreenDialog: true,
+          child: SessionScreen(poseId: poseId),
+        );
+      },
     ),
     GoRoute(
       path: '/settings',
@@ -99,11 +107,16 @@ class App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: 'YogaAI',
-      theme: AppTheme.darkTheme,
-      routerConfig: appRouter,
-      debugShowCheckedModeBanner: false,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+      ],
+      child: MaterialApp.router(
+        title: 'YogaAI',
+        theme: AppTheme.darkTheme,
+        routerConfig: appRouter,
+        debugShowCheckedModeBanner: false,
+      ),
     );
   }
 }

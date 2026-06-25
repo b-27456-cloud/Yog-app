@@ -6,7 +6,7 @@ import '../../core/data/poses_data.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/glass_bottom_nav.dart';
 import '../../core/widgets/glass_card.dart';
-
+import '../../core/widgets/pose_selection_sheet.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({Key? key}) : super(key: key);
 
@@ -188,7 +188,7 @@ class HomeScreen extends StatelessWidget {
                           const SizedBox(height: 14),
                           GestureDetector(
                             onTap: () {
-                              context.push('/camera');
+                              PoseSelectionSheet.show(context);
                             },
                             child: Container(
                               height: 40,
@@ -250,7 +250,9 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildPoseCard(BuildContext context, PoseModel pose) {
     return GestureDetector(
-      onTap: () => context.push('/pose-detail/${pose.id}'),
+      // Use the pose slug (name formatted) for navigation if available,
+      // otherwise open the selection sheet so user picks from real backend data
+      onTap: () => PoseSelectionSheet.show(context),
       child: SizedBox(
         width: 145,
         child: GlassCard(
