@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
@@ -37,27 +36,41 @@ class _CameraScreenState extends State<CameraScreen> {
   Pose? _latestPose;
   Size _imageSize = Size.zero;
 
-  // Audio Beep
+  // Audio feedback
   final AudioPlayer _audioPlayer = AudioPlayer();
-  
+  bool _audioEnabled = true;               // in-app toggle
+  DateTime _lastBeepTime = DateTime(2000); // cooldown gate
+  static const Duration _beepCooldown = Duration(seconds: 4);
+
   // State
   double _pulseOpacity = 1.0;
   int _accuracy = 0;
   String _feedback = 'Initializing session...';
   final String _poseName = 'Detecting...';
   bool _sessionStarted = false;
-  bool _isBeeping = false;
+  bool _isBeeping = false; // visual alert flag
   String? _sessionError;
 
-  static const int _goodAccuracyThreshold = 60;
+  // Beep triggers when accuracy drops below this threshold
+  static const int _goodAccuracyThreshold = 85;
 
   @override
   void initState() {
     super.initState();
     Future.microtask(_animatePulse);
-    _initSession();
-    _initCamera();
-    _audioPlayer.setReleaseMode(ReleaseMode.stop);
+    _initCameraThenSession();
+    // Low-latency mode so the OS silent/ring switch is respected
+    _audioPlayer
+      ..setPlayerMode(PlayerMode.lowLatency)
+      ..setReleaseMode(ReleaseMode.stop);
+  }
+
+  Future<void> _initCameraThenSession() async {
+    await _initCamera();
+    await _initSession();
+    if (_sessionId != null && _cameraController != null && _cameraController!.value.isInitialized) {
+      _startImageStream();
+    }
   }
 
   Future<void> _initCamera() async {
@@ -88,7 +101,6 @@ class _CameraScreenState extends State<CameraScreen> {
           _sessionStarted = true;
           _feedback = 'Session started! Strike the pose.';
         });
-        _startImageStream();
       }
     } on SessionExpiredException {
       if (mounted) setState(() => _sessionError = 'Session expired. Please log in again.');
@@ -118,8 +130,14 @@ class _CameraScreenState extends State<CameraScreen> {
           return;
         }
 
-        final rotation = inputImage.metadata?.rotation ?? InputImageRotation.rotation0deg;
-        _imageSize = (rotation == InputImageRotation.rotation90deg || rotation == InputImageRotation.rotation270deg)
+        // ML Kit reports landmarks in the post-rotation coordinate space.
+        // For 90°/270° sensor orientation the buffer is landscape but the
+        // landmark coordinates are portrait — swap width ↔ height so the
+        // painter's scaleX/scaleY match the actual landmark coordinate space.
+        final rotation = InputImageRotationValue.fromRawValue(_frontCamera!.sensorOrientation)
+            ?? InputImageRotation.rotation0deg;
+        _imageSize = (rotation == InputImageRotation.rotation90deg ||
+                      rotation == InputImageRotation.rotation270deg)
             ? Size(image.height.toDouble(), image.width.toDouble())
             : Size(image.width.toDouble(), image.height.toDouble());
 
@@ -148,39 +166,77 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 
   InputImage? _inputImageFromCameraImage(CameraImage image, CameraDescription camera) {
-    final rotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation) ?? InputImageRotation.rotation0deg;
+    final rotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation)
+        ?? InputImageRotation.rotation0deg;
 
-    if (image.planes.isEmpty) return null;
+    if (Platform.isAndroid) {
+      final yPlane = image.planes[0];
+      final uPlane = image.planes[1];
+      final vPlane = image.planes[2];
 
-    final WriteBuffer allBytes = WriteBuffer();
-    for (final Plane plane in image.planes) {
-      allBytes.putUint8List(plane.bytes);
+      final int width = image.width;
+      final int height = image.height;
+
+      // bytesPerRow is num in this camera version — cast to int
+      final int yRowStride = yPlane.bytesPerRow.toInt();
+      final int uRowStride = uPlane.bytesPerRow.toInt();
+      final int vRowStride = vPlane.bytesPerRow.toInt();
+
+      final nv21 = Uint8List(width * height + 2 * ((width ~/ 2) * (height ~/ 2)));
+
+      // Copy Y plane row-by-row respecting bytesPerRow stride
+      int idx = 0;
+      for (int row = 0; row < height; row++) {
+        nv21.setRange(idx, idx + width, yPlane.bytes, row * yRowStride);
+        idx += width;
+      }
+
+      // Interleave V then U (NV21 = Y + VU interleaved).
+      // pixelStride is not exposed by this camera plugin version; for
+      // Android YUV_420_888 the UV planes have pixelStride = 1.
+      final int uvHeight = height ~/ 2;
+      final int uvWidth = width ~/ 2;
+      for (int row = 0; row < uvHeight; row++) {
+        for (int col = 0; col < uvWidth; col++) {
+          nv21[idx++] = vPlane.bytes[row * vRowStride + col];
+          nv21[idx++] = uPlane.bytes[row * uRowStride + col];
+        }
+      }
+
+      return InputImage.fromBytes(
+        bytes: nv21,
+        metadata: InputImageMetadata(
+          size: Size(width.toDouble(), height.toDouble()),
+          rotation: rotation,
+          format: InputImageFormat.nv21,
+          bytesPerRow: width,
+        ),
+      );
+    } else {
+      // iOS — bgra8888 is a single contiguous plane
+      if (image.planes.isEmpty) return null;
+      return InputImage.fromBytes(
+        bytes: image.planes.first.bytes,
+        metadata: InputImageMetadata(
+          size: Size(image.width.toDouble(), image.height.toDouble()),
+          rotation: rotation,
+          format: InputImageFormat.bgra8888,
+          bytesPerRow: image.planes.first.bytesPerRow,
+        ),
+      );
     }
-    final bytes = allBytes.done().buffer.asUint8List();
-
-    final Size imageSize = Size(image.width.toDouble(), image.height.toDouble());
-
-    // Force NV21 metadata for Android, regardless of the YUV420 camera output
-    final InputImageFormat inputImageFormat = Platform.isAndroid
-        ? InputImageFormat.nv21
-        : InputImageFormat.bgra8888;
-
-    return InputImage.fromBytes(
-      bytes: bytes,
-      metadata: InputImageMetadata(
-        size: imageSize,
-        rotation: rotation,
-        format: inputImageFormat,
-        bytesPerRow: image.planes.first.bytesPerRow,
-      ),
-    );
   }
 
   Future<void> _sendLogFrame(Pose pose, Size imageSize) async {
+    if (_sessionId == null) {
+      debugPrint('[sendLogFrame] Skipped: sessionId is null');
+      return;
+    }
+
     try {
       final w = imageSize.width > 0 ? imageSize.width : 480.0;
       final h = imageSize.height > 0 ? imageSize.height : 640.0;
-      
+
       final landmarks = <Map<String, dynamic>>[];
       for (int i = 0; i < 33; i++) {
         final landmark = pose.landmarks[PoseLandmarkType.values[i]];
@@ -192,7 +248,7 @@ class _CameraScreenState extends State<CameraScreen> {
             'visibility': landmark.likelihood,
           });
         } else {
-           landmarks.add({'x': 0.0, 'y': 0.0, 'z': 0.0, 'visibility': 0.0});
+          landmarks.add({'x': 0.0, 'y': 0.0, 'z': 0.0, 'visibility': 0.0});
         }
       }
 
@@ -200,7 +256,7 @@ class _CameraScreenState extends State<CameraScreen> {
         sessionId: _sessionId!,
         landmarks: landmarks,
       );
-      
+
       final data = response['data'];
       if (data != null && mounted) {
         setState(() {
@@ -212,21 +268,33 @@ class _CameraScreenState extends State<CameraScreen> {
         });
         _updateBeepState(_accuracy);
       }
-    } catch (_) {}
+    } catch (e, st) {
+      debugPrint('[sendLogFrame] Error sending frame: $e');
+      debugPrint('[sendLogFrame] Stack trace: $st');
+    }
   }
 
-  void _updateBeepState(int accuracy) async {
+  /// Called every time a new accuracy value arrives from the API.
+  /// Plays a chime if:
+  ///   - audio is enabled by the user
+  ///   - accuracy is below the threshold
+  ///   - the session has started
+  ///   - at least [_beepCooldown] has elapsed since the last beep
+  void _updateBeepState(int accuracy) {
     final poseIsWrong = accuracy < _goodAccuracyThreshold && _sessionStarted;
-    if (poseIsWrong) {
-      if (!_isBeeping) {
-        setState(() => _isBeeping = true);
-        await _audioPlayer.play(AssetSource('audio/beep.wav'));
-      }
-    } else {
-      if (_isBeeping) {
-        setState(() => _isBeeping = false);
-      }
+
+    // Update the visual alert flag unconditionally
+    if (_isBeeping != poseIsWrong) {
+      setState(() => _isBeeping = poseIsWrong);
     }
+
+    if (!poseIsWrong || !_audioEnabled) return;
+
+    final now = DateTime.now();
+    if (now.difference(_lastBeepTime) < _beepCooldown) return; // cooldown active
+
+    _lastBeepTime = now;
+    _audioPlayer.play(AssetSource('audio/beep.wav')).catchError((_) {});
   }
 
   Future<void> _endSession() async {
@@ -348,13 +416,22 @@ class _CameraScreenState extends State<CameraScreen> {
                           color: AppColors.kNavy,
                         ),
                       ),
-                      _sessionStarted
-                          ? const Icon(Icons.more_vert, color: AppColors.kNavy, size: 20)
-                          : const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.kSkyBlue),
-                            ),
+                       // Audio toggle button — replaces the static 'more_vert' icon
+                       GestureDetector(
+                         onTap: () {
+                           setState(() => _audioEnabled = !_audioEnabled);
+                           if (!_audioEnabled) _audioPlayer.stop();
+                         },
+                         child: AnimatedSwitcher(
+                           duration: const Duration(milliseconds: 200),
+                           child: Icon(
+                             _audioEnabled ? Icons.volume_up : Icons.volume_off,
+                             key: ValueKey(_audioEnabled),
+                             color: _audioEnabled ? AppColors.kNavy : Colors.red,
+                             size: 22,
+                           ),
+                         ),
+                       ),
                     ],
                   ),
                 ),
@@ -620,10 +697,11 @@ class _SkeletonPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     Offset translate(PoseLandmark landmark) {
-      // Scale to view size, and horizontally flip because the underlying CameraPreview is flipped 
-      // with Matrix4.rotationY(math.pi)
-      final x = size.width - (landmark.x * size.width / imageSize.width);
-      final y = landmark.y * size.height / imageSize.height;
+      final scaleX = size.width / imageSize.width;
+      final scaleY = size.height / imageSize.height;
+      // Mirror horizontally to match the flipped CameraPreview (Matrix4.rotationY(pi))
+      final x = size.width - (landmark.x * scaleX);
+      final y = landmark.y * scaleY;
       return Offset(x, y);
     }
 
