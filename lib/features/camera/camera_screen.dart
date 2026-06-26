@@ -15,6 +15,8 @@ import '../../core/widgets/glass_card.dart';
 import '../session/session_service.dart';
 import '../../core/network/api_client.dart';
 
+const double CORRECT_POSE_ANGLE_THRESHOLD = 85;
+
 class CameraScreen extends StatefulWidget {
   final String poseId;
   const CameraScreen({Key? key, required this.poseId}) : super(key: key);
@@ -39,8 +41,6 @@ class _CameraScreenState extends State<CameraScreen> {
   // Audio feedback
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _audioEnabled = true;               // in-app toggle
-  DateTime _lastBeepTime = DateTime(2000); // cooldown gate
-  static const Duration _beepCooldown = Duration(seconds: 4);
 
   // State
   double _pulseOpacity = 1.0;
@@ -50,27 +50,44 @@ class _CameraScreenState extends State<CameraScreen> {
   bool _sessionStarted = false;
   bool _isBeeping = false; // visual alert flag
   String? _sessionError;
-
-  // Beep triggers when accuracy drops below this threshold
-  static const int _goodAccuracyThreshold = 85;
+  bool isAlertPlaying = false;
 
   @override
   void initState() {
     super.initState();
     Future.microtask(_animatePulse);
     _initCameraThenSession();
-    // Low-latency mode so the OS silent/ring switch is respected
-    _audioPlayer
-      ..setPlayerMode(PlayerMode.lowLatency)
-      ..setReleaseMode(ReleaseMode.stop);
   }
 
   Future<void> _initCameraThenSession() async {
+    await _initAudio();   // audio must be configured before camera streams start
     await _initCamera();
     await _initSession();
     if (_sessionId != null && _cameraController != null && _cameraController!.value.isInitialized) {
       _startImageStream();
     }
+  }
+
+  /// Configures the AudioPlayer with the correct AudioContext so Android
+  /// grants audio focus alongside the camera stream, and iOS mixes with
+  /// other audio rather than interrupting it.
+  Future<void> _initAudio() async {
+    await _audioPlayer.setAudioContext(
+      AudioContext(
+        android: AudioContextAndroid(
+          isSpeakerphoneOn: false,
+          stayAwake: false,
+          contentType: AndroidContentType.sonification,
+          usageType: AndroidUsageType.assistanceSonification,
+          audioFocus: AndroidAudioFocus.gainTransientMayDuck,
+        ),
+        iOS: AudioContextIOS(
+          category: AVAudioSessionCategory.playback,
+          options: {AVAudioSessionOptions.mixWithOthers},
+        ),
+      ),
+    );
+    await _audioPlayer.setReleaseMode(ReleaseMode.loop);
   }
 
   Future<void> _initCamera() async {
@@ -281,20 +298,35 @@ class _CameraScreenState extends State<CameraScreen> {
   ///   - the session has started
   ///   - at least [_beepCooldown] has elapsed since the last beep
   void _updateBeepState(int accuracy) {
-    final poseIsWrong = accuracy < _goodAccuracyThreshold && _sessionStarted;
+    final poseIsWrong = accuracy < CORRECT_POSE_ANGLE_THRESHOLD && _sessionStarted;
 
     // Update the visual alert flag unconditionally
     if (_isBeeping != poseIsWrong) {
       setState(() => _isBeeping = poseIsWrong);
     }
 
-    if (!poseIsWrong || !_audioEnabled) return;
+    if (!_audioEnabled) {
+      if (isAlertPlaying) {
+        _audioPlayer.stop();
+        isAlertPlaying = false;
+      }
+      return;
+    }
 
-    final now = DateTime.now();
-    if (now.difference(_lastBeepTime) < _beepCooldown) return; // cooldown active
-
-    _lastBeepTime = now;
-    _audioPlayer.play(AssetSource('audio/beep.wav')).catchError((_) {});
+    if (poseIsWrong) {
+      if (!isAlertPlaying) {
+        isAlertPlaying = true;
+        _audioPlayer.play(AssetSource('audio/incorrect_buzzer.mp3')).catchError((e) {
+          debugPrint('[Beep] play() failed: $e');
+          isAlertPlaying = false;
+        });
+      }
+    } else {
+      if (isAlertPlaying) {
+        _audioPlayer.stop();
+        isAlertPlaying = false;
+      }
+    }
   }
 
   Future<void> _endSession() async {
@@ -420,7 +452,12 @@ class _CameraScreenState extends State<CameraScreen> {
                        GestureDetector(
                          onTap: () {
                            setState(() => _audioEnabled = !_audioEnabled);
-                           if (!_audioEnabled) _audioPlayer.stop();
+                           if (!_audioEnabled) {
+                             _audioPlayer.stop();
+                             isAlertPlaying = false;
+                           } else {
+                             _updateBeepState(_accuracy);
+                           }
                          },
                          child: AnimatedSwitcher(
                            duration: const Duration(milliseconds: 200),
@@ -504,7 +541,7 @@ class _CameraScreenState extends State<CameraScreen> {
                       fontWeight: FontWeight.bold,
                       color: _isBeeping
                           ? Colors.red
-                          : _accuracy >= 80 ? AppColors.kTeal : _accuracy >= _goodAccuracyThreshold ? AppColors.kSkyBlue : Colors.orange,
+                          : _accuracy >= 80 ? AppColors.kTeal : _accuracy >= CORRECT_POSE_ANGLE_THRESHOLD ? AppColors.kSkyBlue : Colors.orange,
                     ),
                   ),
                   Text('Accuracy', style: TextStyle(fontSize: 11, color: AppColors.kNavy.withOpacity(0.65))),
