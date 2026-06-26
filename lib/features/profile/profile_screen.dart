@@ -1,14 +1,68 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/glass_bottom_nav.dart';
 import '../../core/widgets/glass_card.dart';
+import '../../core/network/analytics_service.dart';
+import '../../core/models/analytics_models.dart';
+import '../auth/auth_provider.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final AnalyticsService _analyticsService = AnalyticsService();
+
+  UserStats? _userStats;
+  UserStreak? _userStreak;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchData();
+  }
+
+  Future<void> _fetchData() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userId = authProvider.user?.id;
+    if (userId == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    try {
+      final results = await Future.wait([
+        _analyticsService.fetchUserStats(userId),
+        _analyticsService.fetchUserStreak(userId),
+      ]);
+      if (mounted) {
+        setState(() {
+          _userStats = results[0] as UserStats;
+          _userStreak = results[1] as UserStreak;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
+    final user = authProvider.user;
+    final fullName = user != null
+        ? '${user.firstName} ${user.lastName}'.trim()
+        : 'Guest User';
+    final email = user?.email ?? '';
+
     return Scaffold(
       backgroundColor: Colors.white,
       extendBody: true,
@@ -36,7 +90,7 @@ class ProfileScreen extends StatelessWidget {
                   ),
                 ),
                 Positioned(
-                  bottom: -48, // Avatar is radius 48, so it overflows by 48
+                  bottom: -48,
                   child: Stack(
                     children: [
                       const CircleAvatar(
@@ -63,10 +117,11 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 60), // Space for avatar
+            const SizedBox(height: 60),
 
+            // ─── NAME & BIO ───
             Text(
-              "Alex Johnson",
+              fullName.isNotEmpty ? fullName : 'Guest User',
               style: GoogleFonts.poppins(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
@@ -75,7 +130,7 @@ class ProfileScreen extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              "Yoga Enthusiast  •  2 Years",
+              email.isNotEmpty ? email : 'Yoga Enthusiast',
               style: TextStyle(
                 color: AppColors.kNavy.withOpacity(0.65),
                 fontSize: 13,
@@ -88,86 +143,130 @@ class ProfileScreen extends StatelessWidget {
               child: Column(
                 children: [
                   // ─── STATS ROW ───
-                  Row(
-                    children: [
-                      Expanded(child: _buildStatCard("142", "Sessions")),
-                      const SizedBox(width: 10),
-                      Expanded(child: _buildStatCard("34", "Poses")),
-                      const SizedBox(width: 10),
-                      Expanded(child: _buildStatCard("7", "Streak")),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // ─── LEVEL CARD ───
-                  GlassCard(
-                    borderRadius: 18,
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  if (_isLoading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16.0),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else
+                    Row(
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "Intermediate Yogi",
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.kNavy,
-                                  ),
-                                ),
-                                Text(
-                                  "1,240 / 2,000 XP to Level 8",
-                                  style: TextStyle(
-                                    color: AppColors.kNavy.withOpacity(0.65),
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: AppColors.kPrimary,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                "LVL 7",
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: LinearProgressIndicator(
-                            value: 0.62,
-                            minHeight: 8,
-                            backgroundColor: AppColors.kPrimary.withOpacity(0.15),
-                            color: AppColors.kSkyBlue,
+                        Expanded(
+                          child: _buildStatCard(
+                            _userStats != null ? '${_userStats!.totalSessions}' : '--',
+                            'Sessions',
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          "62% to next level",
-                          style: TextStyle(
-                            color: AppColors.kNavy.withOpacity(0.65),
-                            fontSize: 12,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _buildStatCard(
+                            _userStats != null ? '${_userStats!.totalMinutes}m' : '--',
+                            'Practiced',
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _buildStatCard(
+                            _userStreak != null ? '${_userStreak!.currentStreak}' : '--',
+                            'Streak',
                           ),
                         ),
                       ],
                     ),
-                  ),
                   const SizedBox(height: 24),
+
+                  // ─── STREAK DETAILS CARD ───
+                  if (!_isLoading && _userStreak != null)
+                    GlassCard(
+                      borderRadius: 18,
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Best Streak: ${_userStreak!.longestStreak} days',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.kNavy,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${_userStreak!.totalDaysPracticed} total days practiced',
+                                    style: TextStyle(
+                                      color: AppColors.kNavy.withOpacity(0.65),
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                children: [
+                                  const Icon(Icons.ac_unit, color: AppColors.kSkyBlue, size: 16),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${_userStreak!.availableFreezes} freeze${_userStreak!.availableFreezes == 1 ? '' : 's'}',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.kSkyBlue,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          // Progress toward longest streak
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: LinearProgressIndicator(
+                              value: _userStreak!.longestStreak > 0
+                                  ? (_userStreak!.currentStreak / _userStreak!.longestStreak).clamp(0.0, 1.0)
+                                  : 0.0,
+                              minHeight: 8,
+                              backgroundColor: AppColors.kPrimary.withOpacity(0.15),
+                              color: AppColors.kSkyBlue,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _userStreak!.currentStreak >= _userStreak!.longestStreak && _userStreak!.currentStreak > 0
+                                ? '🏆 Personal best!'
+                                : '${_userStreak!.currentStreak} / ${_userStreak!.longestStreak} days to personal best',
+                            style: TextStyle(
+                              color: AppColors.kNavy.withOpacity(0.65),
+                              fontSize: 12,
+                            ),
+                          ),
+                          if (_userStats?.favoritePose != null) ...[
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                const Icon(Icons.star, color: AppColors.kSkyBlue, size: 16),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Favourite Pose: ${_userStats!.favoritePose!.poseName} (×${_userStats!.favoritePose!.count})',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.kNavy,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  if (!_isLoading && _userStreak != null)
+                    const SizedBox(height: 24),
 
                   // ─── MENU ───
                   GlassCard(
@@ -177,25 +276,17 @@ class ProfileScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(18),
                       child: Column(
                         children: [
-                          _buildMenuItem(Icons.favorite_border, "Saved Poses", () {
-                            // context.push('/saved');
-                          }),
+                          _buildMenuItem(Icons.favorite_border, 'Saved Poses', () {}),
                           _buildDivider(),
-                          _buildMenuItem(Icons.emoji_events_outlined, "Achievements", () {
-                            // context.push('/achievements');
-                          }),
+                          _buildMenuItem(Icons.emoji_events_outlined, 'Achievements', () {}),
                           _buildDivider(),
-                          _buildMenuItem(Icons.notifications_outlined, "Notifications", () {
-                            // context.push('/notifications');
-                          }),
+                          _buildMenuItem(Icons.notifications_outlined, 'Notifications', () {}),
                           _buildDivider(),
-                          _buildMenuItem(Icons.settings_outlined, "Settings", () {
+                          _buildMenuItem(Icons.settings_outlined, 'Settings', () {
                             context.push('/settings');
                           }),
                           _buildDivider(),
-                          _buildMenuItem(Icons.help_outline, "Help & Support", () {
-                            // context.push('/help');
-                          }),
+                          _buildMenuItem(Icons.help_outline, 'Help & Support', () {}),
                         ],
                       ),
                     ),
@@ -209,15 +300,17 @@ class ProfileScreen extends StatelessWidget {
                     child: ListTile(
                       leading: const Icon(Icons.logout, color: Colors.redAccent, size: 22),
                       title: Text(
-                        "Log Out",
+                        'Log Out',
                         style: GoogleFonts.poppins(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                           color: Colors.redAccent,
                         ),
                       ),
-                      onTap: () {
-                        context.go('/login');
+                      onTap: () async {
+                        final router = GoRouter.of(context);
+                        await Provider.of<AuthProvider>(context, listen: false).logout();
+                        if (mounted) router.go('/login');
                       },
                     ),
                   ),
@@ -240,7 +333,7 @@ class ProfileScreen extends StatelessWidget {
           Text(
             value,
             style: GoogleFonts.poppins(
-              fontSize: 26,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
               color: AppColors.kSkyBlue,
             ),

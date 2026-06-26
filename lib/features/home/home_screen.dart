@@ -1,17 +1,65 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../core/models/pose_model.dart';
 import '../../core/data/poses_data.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/glass_bottom_nav.dart';
 import '../../core/widgets/glass_card.dart';
 import '../../core/widgets/pose_selection_sheet.dart';
-class HomeScreen extends StatelessWidget {
+import '../../core/network/analytics_service.dart';
+import '../../core/models/analytics_models.dart';
+import '../auth/auth_provider.dart';
+
+class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final AnalyticsService _analyticsService = AnalyticsService();
+  UserStats? _userStats;
+  UserStreak? _userStreak;
+  bool _isLoadingStats = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchData();
+  }
+
+  Future<void> _fetchData() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userId = authProvider.user?.id;
+    if (userId == null) {
+      setState(() => _isLoadingStats = false);
+      return;
+    }
+
+    try {
+      final stats = await _analyticsService.fetchUserStats(userId);
+      final streak = await _analyticsService.fetchUserStreak(userId);
+      if (mounted) {
+        setState(() {
+          _userStats = stats;
+          _userStreak = streak;
+          _isLoadingStats = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingStats = false);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final user = Provider.of<AuthProvider>(context).user;
+    final name = user != null ? user.firstName : 'Guest';
+
     return Scaffold(
       backgroundColor: Colors.white,
       extendBody: true,
@@ -39,7 +87,7 @@ class HomeScreen extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        "Alex",
+                        name,
                         style: GoogleFonts.poppins(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
@@ -63,53 +111,81 @@ class HomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
 
-              // ─── SECTION 2: STREAK CARD ───
-              GlassCard(
-                borderRadius: 18,
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // ─── DASHBOARD STATS ───
+              if (_isLoadingStats)
+                const Center(child: Padding(
+                  padding: EdgeInsets.all(20.0),
+                  child: CircularProgressIndicator(),
+                ))
+              else if (_userStats != null)
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: AppColors.kPrimary.withOpacity(0.25),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(Icons.local_fire_department, color: AppColors.kSkyBlue, size: 26),
-                        ),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "7 Day Streak",
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.kNavy,
-                              ),
-                            ),
-                            Text(
-                              "Keep it up!",
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                fontWeight: FontWeight.normal,
-                                color: AppColors.kNavy.withOpacity(0.65),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                    Expanded(child: _buildStatCard("${_userStats!.totalMinutes}m", "Practiced")),
+                    const SizedBox(width: 10),
+                    Expanded(child: _buildStatCard("${_userStats!.totalSessions}", "Sessions")),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildStatCard(
+                        _userStats!.favoritePose?.poseName.split(' ').first ?? "-", 
+                        "Fav Pose",
+                      ),
                     ),
-                    const Text("🏆", style: TextStyle(fontSize: 30)),
                   ],
                 ),
-              ),
-              const SizedBox(height: 24),
+              if (!_isLoadingStats && _userStats != null)
+                const SizedBox(height: 24),
+
+              // ─── SECTION 2: STREAK CARD ───
+              if (!_isLoadingStats && _userStreak != null)
+                GlassCard(
+                  borderRadius: 18,
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: AppColors.kPrimary.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.local_fire_department, color: AppColors.kSkyBlue, size: 26),
+                          ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "${_userStreak!.currentStreak} Day Streak",
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.kNavy,
+                                ),
+                              ),
+                              Text(
+                                _userStreak!.currentStreak >= _userStreak!.longestStreak && _userStreak!.currentStreak > 0
+                                    ? "Personal Best!"
+                                    : "Longest: ${_userStreak!.longestStreak} days",
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.normal,
+                                  color: AppColors.kNavy.withOpacity(0.65),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const Text("🏆", style: TextStyle(fontSize: 30)),
+                    ],
+                  ),
+                ),
+              if (!_isLoadingStats && _userStreak != null)
+                const SizedBox(height: 24),
 
               // ─── SECTION 3: TODAY'S SESSION ───
               Row(
@@ -248,10 +324,39 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildStatCard(String value, String label) {
+    return GlassCard(
+      borderRadius: 16,
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: GoogleFonts.poppins(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: AppColors.kSkyBlue,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: AppColors.kNavy.withOpacity(0.65),
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPoseCard(BuildContext context, PoseModel pose) {
     return GestureDetector(
-      // Use the pose slug (name formatted) for navigation if available,
-      // otherwise open the selection sheet so user picks from real backend data
       onTap: () => PoseSelectionSheet.show(context),
       child: SizedBox(
         width: 145,

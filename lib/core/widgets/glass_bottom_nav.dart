@@ -11,8 +11,7 @@ class GlassBottomNav extends StatelessWidget {
     final String location = GoRouterState.of(context).uri.path;
     if (location.startsWith('/home')) return 0;
     if (location.startsWith('/explore')) return 1;
-    if (location.startsWith('/progress')) return 3;
-    if (location.startsWith('/profile')) return 4;
+    if (location.startsWith('/profile')) return 3;
     return 0; // default
   }
 
@@ -28,9 +27,6 @@ class GlassBottomNav extends StatelessWidget {
         PoseSelectionSheet.show(context);
         break;
       case 3:
-        context.go('/progress');
-        break;
-      case 4:
         context.go('/profile');
         break;
     }
@@ -62,8 +58,7 @@ class GlassBottomNav extends StatelessWidget {
               _buildNavItem(context, 0, Icons.home, 'Home', currentIndex),
               _buildNavItem(context, 1, Icons.explore, 'Explore', currentIndex),
               _buildCenterItem(context),
-              _buildNavItem(context, 3, Icons.bar_chart, 'Progress', currentIndex),
-              _buildNavItem(context, 4, Icons.person, 'Profile', currentIndex),
+              _buildNavItem(context, 3, Icons.person, 'Profile', currentIndex),
             ],
           ),
         ),

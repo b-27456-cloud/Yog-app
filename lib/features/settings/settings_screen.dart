@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/glass_card.dart';
 import '../../core/models/settings_model.dart';
+import '../../core/models/analytics_models.dart';
+import '../../core/network/analytics_service.dart';
 import '../auth/auth_provider.dart';
 import 'settings_service.dart';
 
@@ -17,11 +19,79 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final SettingsService _settingsService = SettingsService();
+  final AnalyticsService _analyticsService = AnalyticsService();
 
+  // Preferences state
   bool _pushNotifications = true;
   bool _soundEffects = true;
   bool _hapticFeedback = false;
   bool _mirrorMode = false;
+
+  // Analytics state
+  List<String> _insights = [];
+  List<SessionRecord> _sessions = [];
+  SessionMeta? _sessionMeta;
+  bool _isLoadingInsights = true;
+  bool _isLoadingSessions = true;
+  int _currentPage = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAnalytics();
+  }
+
+  Future<void> _fetchAnalytics() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userId = authProvider.user?.id;
+    if (userId == null) {
+      setState(() {
+        _isLoadingInsights = false;
+        _isLoadingSessions = false;
+      });
+      return;
+    }
+
+    // Fetch insights
+    _analyticsService.fetchUserInsights(userId).then((insights) {
+      if (mounted) setState(() { _insights = insights; _isLoadingInsights = false; });
+    }).catchError((_) {
+      if (mounted) setState(() => _isLoadingInsights = false);
+    });
+
+    // Fetch sessions
+    _analyticsService.fetchUserSessions(userId, page: _currentPage).then((res) {
+      if (mounted) {
+        setState(() {
+          _sessions = res.sessions;
+          _sessionMeta = res.meta;
+          _isLoadingSessions = false;
+        });
+      }
+    }).catchError((_) {
+      if (mounted) setState(() => _isLoadingSessions = false);
+    });
+  }
+
+  Future<void> _loadMoreSessions() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userId = authProvider.user?.id;
+    if (userId == null) return;
+    final nextPage = _currentPage + 1;
+    final total = _sessionMeta?.pages ?? 1;
+    if (nextPage > total) return;
+
+    try {
+      final res = await _analyticsService.fetchUserSessions(userId, page: nextPage);
+      if (mounted) {
+        setState(() {
+          _sessions.addAll(res.sessions);
+          _sessionMeta = res.meta;
+          _currentPage = nextPage;
+        });
+      }
+    } catch (_) {}
+  }
 
   Future<void> _updateSettingOptimistically({
     bool? pushNotifications,
@@ -31,26 +101,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final userId = authProvider.user?.id;
     if (userId == null) return;
 
-    // Apply optimistic update
     setState(() {
       if (pushNotifications != null) _pushNotifications = pushNotifications;
       if (hapticFeedback != null) _hapticFeedback = hapticFeedback;
     });
 
     final newSettings = SettingsModel(
-      accessibility: AccessibilitySettings(
-        hapticFeedback: _hapticFeedback,
-      ),
-      settings: AppSettings(
-        notifications: _pushNotifications,
-      ),
+      accessibility: AccessibilitySettings(hapticFeedback: _hapticFeedback),
+      settings: AppSettings(notifications: _pushNotifications),
     );
 
     try {
       await _settingsService.updateSettings(userId, newSettings);
     } catch (e) {
       if (mounted) {
-        // Revert update on failure
         setState(() {
           if (pushNotifications != null) _pushNotifications = !pushNotifications;
           if (hapticFeedback != null) _hapticFeedback = !hapticFeedback;
@@ -87,6 +151,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // ─── SECTION: AI Insights ───
+            _buildSectionHeader("AI Insights ✨"),
+            _buildInsightsSection(),
+            const SizedBox(height: 20),
+
+            // ─── SECTION: Session History ───
+            _buildSectionHeader("Session History"),
+            _buildSessionHistorySection(),
+            const SizedBox(height: 20),
+
             // ─── SECTION: Account ───
             _buildSectionHeader("Account"),
             GlassCard(
@@ -96,15 +170,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 borderRadius: BorderRadius.circular(18),
                 child: Column(
                   children: [
-                    // Profile tile
                     Consumer<AuthProvider>(
                       builder: (context, authProvider, child) {
                         final user = authProvider.user;
-                        final name = user != null 
-                            ? '${user.firstName} ${user.lastName}'.trim() 
+                        final name = user != null
+                            ? '${user.firstName} ${user.lastName}'.trim()
                             : 'Guest User';
                         final email = user?.email ?? '';
-                        
+
                         return ListTile(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                           leading: const CircleAvatar(
@@ -172,7 +245,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       (v) => _updateSettingOptimistically(hapticFeedback: v),
                     ),
                     _buildDivider(),
-                    // Dark mode — disabled (always on)
                     ListTile(
                       leading: _buildLeadingIcon(Icons.dark_mode_outlined),
                       title: Text(
@@ -255,7 +327,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _buildDivider(),
                     _buildNavTile(Icons.description_outlined, "Terms of Service", null, () {}),
                     _buildDivider(),
-                    // Rate App with kSkyBlue icon
                     ListTile(
                       leading: Container(
                         width: 36,
@@ -297,9 +368,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                       onTap: () async {
+                        final router = GoRouter.of(context);
                         await Provider.of<AuthProvider>(context, listen: false).logout();
                         if (mounted) {
-                          context.go('/login');
+                          router.go('/login');
                         }
                       },
                     ),
@@ -314,6 +386,247 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // ─── AI INSIGHTS SECTION ───
+  Widget _buildInsightsSection() {
+    if (_isLoadingInsights) {
+      return GlassCard(
+        borderRadius: 18,
+        padding: const EdgeInsets.all(24),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_insights.isEmpty) {
+      return GlassCard(
+        borderRadius: 18,
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            const Icon(Icons.lightbulb_outline, color: AppColors.kSkyBlue, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                "No insights yet. Complete a few sessions to get personalized tips!",
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.kNavy.withOpacity(0.65),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final insightColors = [
+      const Color(0xFFE8F5FF),
+      const Color(0xFFF0FFF4),
+      const Color(0xFFFFF8E8),
+    ];
+    final insightBorderColors = [
+      AppColors.kSkyBlue.withOpacity(0.3),
+      const Color(0xFF4CAF50).withOpacity(0.3),
+      const Color(0xFFFF9800).withOpacity(0.3),
+    ];
+
+    return Column(
+      children: List.generate(_insights.length, (i) {
+        final color = insightColors[i % insightColors.length];
+        final borderColor = insightBorderColors[i % insightBorderColors.length];
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10.0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderColor, width: 1.2),
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("💡", style: TextStyle(fontSize: 20)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _insights[i],
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.kNavy,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  // ─── SESSION HISTORY SECTION ───
+  Widget _buildSessionHistorySection() {
+    if (_isLoadingSessions) {
+      return GlassCard(
+        borderRadius: 18,
+        padding: const EdgeInsets.all(24),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_sessions.isEmpty) {
+      return GlassCard(
+        borderRadius: 18,
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            const Icon(Icons.history, color: AppColors.kSkyBlue, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                "No sessions yet. Start your first yoga session!",
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.kNavy.withOpacity(0.65),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        GlassCard(
+          borderRadius: 18,
+          padding: EdgeInsets.zero,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Column(
+              children: List.generate(_sessions.length, (i) {
+                final session = _sessions[i];
+                return Column(
+                  children: [
+                    _buildSessionTile(session),
+                    if (i < _sessions.length - 1) _buildDivider(),
+                  ],
+                );
+              }),
+            ),
+          ),
+        ),
+        // Pagination
+        if (_sessionMeta != null && _currentPage < _sessionMeta!.pages)
+          Padding(
+            padding: const EdgeInsets.only(top: 12.0),
+            child: GestureDetector(
+              onTap: _loadMoreSessions,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.kPrimary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.kPrimary.withOpacity(0.25)),
+                ),
+                child: Center(
+                  child: Text(
+                    "Load More Sessions",
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.kPrimary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        if (_sessionMeta != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0, left: 4.0),
+            child: Text(
+              "Showing ${_sessions.length} of ${_sessionMeta!.total} sessions",
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.kNavy.withOpacity(0.5),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSessionTile(SessionRecord session) {
+    final durationMin = (session.durationSeconds / 60).round();
+    final dateStr = session.startTime != null
+        ? _formatDate(session.startTime!)
+        : "Unknown date";
+    final levelBadge = ['Beginner', 'Intermediate', 'Advanced'];
+    final level = session.pose.level.clamp(1, 3) - 1;
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      leading: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: AppColors.kPrimary.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.accessibility_new, color: AppColors.kSkyBlue, size: 22),
+      ),
+      title: Text(
+        session.pose.name.isNotEmpty ? session.pose.name : "Yoga Session",
+        style: GoogleFonts.poppins(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: AppColors.kNavy,
+        ),
+      ),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 2.0),
+        child: Text(
+          "$dateStr  •  ${durationMin}m  •  ${session.accuracyAverage}% accuracy",
+          style: TextStyle(
+            fontSize: 12,
+            color: AppColors.kNavy.withOpacity(0.6),
+          ),
+        ),
+      ),
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.kSkyBlue.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          levelBadge[level],
+          style: GoogleFonts.poppins(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: AppColors.kSkyBlue,
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date).inDays;
+    if (diff == 0) return "Today";
+    if (diff == 1) return "Yesterday";
+    if (diff < 7) return "${diff}d ago";
+    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return "${months[date.month - 1]} ${date.day}";
+  }
+
+  // ─── SHARED HELPERS ───
   Widget _buildSectionHeader(String label) {
     return Padding(
       padding: const EdgeInsets.only(left: 4.0, bottom: 8.0),

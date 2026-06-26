@@ -16,7 +16,7 @@ import '../session/session_service.dart';
 import '../../core/network/api_client.dart';
 
 const double CORRECT_POSE_ANGLE_THRESHOLD = 85;
-const int _kBeepAccuracyThreshold = 60;
+const int _kBeepAccuracyThreshold = 80;
 
 class CameraScreen extends StatefulWidget {
   final String poseId;
@@ -52,6 +52,7 @@ class _CameraScreenState extends State<CameraScreen> {
   bool _isBeeping = false; // visual alert flag
   String? _sessionError;
   DateTime? _lastBeepTime;
+  bool _isDisposed = false;
 
   @override
   void initState() {
@@ -80,7 +81,7 @@ class _CameraScreenState extends State<CameraScreen> {
           stayAwake: false,
           contentType: AndroidContentType.sonification,
           usageType: AndroidUsageType.assistanceSonification,
-          audioFocus: AndroidAudioFocus.gainTransientMayDuck,
+          audioFocus: AndroidAudioFocus.gain,
         ),
         iOS: AudioContextIOS(
           category: AVAudioSessionCategory.playback,
@@ -89,7 +90,6 @@ class _CameraScreenState extends State<CameraScreen> {
       ),
     );
     await _audioPlayer.setReleaseMode(ReleaseMode.release);
-    await _audioPlayer.setVolume(1.0);
   }
 
   Future<void> _initCamera() async {
@@ -317,9 +317,11 @@ class _CameraScreenState extends State<CameraScreen> {
     }
 
     _lastBeepTime = now;
-    _audioPlayer.play(AssetSource('audio/beep.wav')).catchError((e) {
-      debugPrint('[Beep] play() failed: $e');
-    });
+    if (!_isDisposed) {
+      _audioPlayer.play(AssetSource('audio/beep.wav'), volume: 0.1).catchError((e) {
+        debugPrint('[Beep] play() failed: $e');
+      });
+    }
   }
 
   Future<void> _endSession() async {
@@ -344,6 +346,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
   @override
   void dispose() {
+    _isDisposed = true;
     _cameraController?.dispose();
     _poseDetector.close();
     _audioPlayer.dispose();
@@ -445,7 +448,7 @@ class _CameraScreenState extends State<CameraScreen> {
                        GestureDetector(
                          onTap: () {
                            setState(() => _audioEnabled = !_audioEnabled);
-                           if (!_audioEnabled) _audioPlayer.stop();
+                           if (!_audioEnabled && !_isDisposed) _audioPlayer.stop();
                          },
                          child: AnimatedSwitcher(
                            duration: const Duration(milliseconds: 200),

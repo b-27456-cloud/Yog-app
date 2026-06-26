@@ -9,7 +9,6 @@ import 'features/auth/register_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/explore/explore_screen.dart';
 import 'features/camera/camera_screen.dart';
-import 'features/progress/progress_screen.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/pose_detail/pose_detail_screen.dart';
 import 'features/session/session_screen.dart';
@@ -57,10 +56,6 @@ final GoRouter appRouter = GoRouter(
           child: CameraScreen(poseId: poseId),
         );
       },
-    ),
-    GoRoute(
-      path: '/progress',
-      pageBuilder: (context, state) => _buildPageWithTransition(const ProgressScreen(), state),
     ),
     GoRoute(
       path: '/profile',
