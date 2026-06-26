@@ -16,6 +16,7 @@ import '../session/session_service.dart';
 import '../../core/network/api_client.dart';
 
 const double CORRECT_POSE_ANGLE_THRESHOLD = 85;
+const int _kBeepAccuracyThreshold = 60;
 
 class CameraScreen extends StatefulWidget {
   final String poseId;
@@ -50,7 +51,7 @@ class _CameraScreenState extends State<CameraScreen> {
   bool _sessionStarted = false;
   bool _isBeeping = false; // visual alert flag
   String? _sessionError;
-  bool isAlertPlaying = false;
+  DateTime? _lastBeepTime;
 
   @override
   void initState() {
@@ -87,7 +88,8 @@ class _CameraScreenState extends State<CameraScreen> {
         ),
       ),
     );
-    await _audioPlayer.setReleaseMode(ReleaseMode.loop);
+    await _audioPlayer.setReleaseMode(ReleaseMode.release);
+    await _audioPlayer.setVolume(1.0);
   }
 
   Future<void> _initCamera() async {
@@ -298,35 +300,26 @@ class _CameraScreenState extends State<CameraScreen> {
   ///   - the session has started
   ///   - at least [_beepCooldown] has elapsed since the last beep
   void _updateBeepState(int accuracy) {
-    final poseIsWrong = accuracy < CORRECT_POSE_ANGLE_THRESHOLD && _sessionStarted;
+    final poseIsWrong = accuracy < _kBeepAccuracyThreshold && _sessionStarted;
 
-    // Update the visual alert flag unconditionally
+    // Update the visual alert flag
     if (_isBeeping != poseIsWrong) {
       setState(() => _isBeeping = poseIsWrong);
     }
 
-    if (!_audioEnabled) {
-      if (isAlertPlaying) {
-        _audioPlayer.stop();
-        isAlertPlaying = false;
-      }
+    if (!_audioEnabled || !poseIsWrong) return;
+
+    // Throttle: play at most once per 1000 ms
+    final now = DateTime.now();
+    if (_lastBeepTime != null &&
+        now.difference(_lastBeepTime!).inMilliseconds < 1000) {
       return;
     }
 
-    if (poseIsWrong) {
-      if (!isAlertPlaying) {
-        isAlertPlaying = true;
-        _audioPlayer.play(AssetSource('audio/incorrect_buzzer.mp3')).catchError((e) {
-          debugPrint('[Beep] play() failed: $e');
-          isAlertPlaying = false;
-        });
-      }
-    } else {
-      if (isAlertPlaying) {
-        _audioPlayer.stop();
-        isAlertPlaying = false;
-      }
-    }
+    _lastBeepTime = now;
+    _audioPlayer.play(AssetSource('audio/beep.wav')).catchError((e) {
+      debugPrint('[Beep] play() failed: $e');
+    });
   }
 
   Future<void> _endSession() async {
@@ -452,12 +445,7 @@ class _CameraScreenState extends State<CameraScreen> {
                        GestureDetector(
                          onTap: () {
                            setState(() => _audioEnabled = !_audioEnabled);
-                           if (!_audioEnabled) {
-                             _audioPlayer.stop();
-                             isAlertPlaying = false;
-                           } else {
-                             _updateBeepState(_accuracy);
-                           }
+                           if (!_audioEnabled) _audioPlayer.stop();
                          },
                          child: AnimatedSwitcher(
                            duration: const Duration(milliseconds: 200),
