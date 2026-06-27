@@ -26,7 +26,11 @@ class AuthService {
       });
 
       // Backend returns 201 with user profile
-      return UserModel.fromJson(response['user'] ?? response);
+      final userData = response['data']?['user'] ?? 
+                       response['user'] ?? 
+                       response['data'] ?? 
+                       response;
+      return UserModel.fromJson(userData);
     } catch (e) {
       if (e is ApiException && e.message.toLowerCase().contains('already exists')) {
         throw ValidationException('An account with this email already exists. Try logging in.');
@@ -49,7 +53,11 @@ class AuthService {
         await prefs.setBool('isLoggedIn', true);
       }
 
-      return UserModel.fromJson(response['user'] ?? response);
+      final userData = response['data']?['user'] ?? 
+                       response['user'] ?? 
+                       response['data'] ?? 
+                       response;
+      return UserModel.fromJson(userData);
     } catch (e) {
       if (e is ApiException && 
          (e.message.toLowerCase().contains('invalid') || 
@@ -63,7 +71,14 @@ class AuthService {
 
   Future<UserModel> getCurrentUser() async {
     final response = await _apiClient.get('/api/v1/auth/me');
-    return UserModel.fromJson(response['user'] ?? response);
+    
+    // Robust extraction to handle various backend response formats
+    final userData = response['data']?['user'] ?? 
+                     response['user'] ?? 
+                     response['data'] ?? 
+                     response;
+                     
+    return UserModel.fromJson(userData);
   }
 
   Future<void> logout() async {

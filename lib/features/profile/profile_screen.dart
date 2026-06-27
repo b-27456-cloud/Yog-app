@@ -21,36 +21,88 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   UserStats? _userStats;
   UserStreak? _userStreak;
+  List<String> _insights = [];
+  List<SessionRecord> _sessions = [];
+  SessionMeta? _sessionMeta;
   bool _isLoading = true;
+  String? _errorMessage;
+  int _currentPage = 1;
 
   @override
   void initState() {
     super.initState();
-    _fetchData();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _fetchData());
   }
 
   Future<void> _fetchData() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userId = authProvider.user?.id;
     if (userId == null) {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = "User not logged in.";
+        });
+      }
       return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+        _currentPage = 1;
+      });
     }
 
     try {
       final results = await Future.wait([
         _analyticsService.fetchUserStats(userId),
         _analyticsService.fetchUserStreak(userId),
+        _analyticsService.fetchUserInsights(userId),
+        _analyticsService.fetchUserSessions(userId, page: _currentPage),
       ]);
       if (mounted) {
         setState(() {
           _userStats = results[0] as UserStats;
           _userStreak = results[1] as UserStreak;
+          _insights = results[2] as List<String>;
+          final sessionRes = results[3] as SessionResponse;
+          _sessions = sessionRes.sessions;
+          _sessionMeta = sessionRes.meta;
           _isLoading = false;
         });
       }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = e.toString();
+        });
+      }
+    }
+  }
+
+  Future<void> _loadMoreSessions() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userId = authProvider.user?.id;
+    if (userId == null) return;
+    if (_sessionMeta == null) return;
+
+    final nextPage = _currentPage + 1;
+    if (nextPage > _sessionMeta!.pages) return;
+
+    try {
+      final res = await _analyticsService.fetchUserSessions(userId, page: nextPage);
+      if (mounted) {
+        setState(() {
+          _sessions.addAll(res.sessions);
+          _sessionMeta = res.meta;
+          _currentPage = nextPage;
+        });
+      }
     } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
+      // Ignore pagination errors to keep existing items visible
     }
   }
 
@@ -58,266 +110,454 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.user;
-    final fullName = user != null
-        ? '${user.firstName} ${user.lastName}'.trim()
-        : 'Guest User';
+    final fullName = user != null ? '${user.firstName} ${user.lastName}'.trim() : 'Guest User';
     final email = user?.email ?? '';
 
     return Scaffold(
       backgroundColor: Colors.white,
       extendBody: true,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 90.0),
-        child: Column(
-          children: [
-            // ─── TOP HEADER ───
-            Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.center,
-              children: [
-                Container(
-                  height: 200,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        AppColors.kNavy,
-                        AppColors.kPrimary.withOpacity(0.6),
-                      ],
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: -48,
-                  child: Stack(
-                    children: [
-                      const CircleAvatar(
-                        radius: 48,
-                        backgroundColor: AppColors.kLightBlue,
-                        child: Icon(Icons.person, color: AppColors.kNavy, size: 52),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color: AppColors.kPrimary,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: AppColors.kSteelBlue, width: 2),
-                          ),
-                          child: const Icon(Icons.camera_alt, color: Colors.white, size: 14),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 60),
-
-            // ─── NAME & BIO ───
-            Text(
-              fullName.isNotEmpty ? fullName : 'Guest User',
-              style: GoogleFonts.poppins(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: AppColors.kNavy,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              email.isNotEmpty ? email : 'Yoga Enthusiast',
-              style: TextStyle(
-                color: AppColors.kNavy.withOpacity(0.65),
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Column(
+      body: RefreshIndicator(
+        onRefresh: _fetchData,
+        color: AppColors.kPrimary,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 90.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ─── TOP HEADER ───
+              Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
                 children: [
-                  // ─── STATS ROW ───
-                  if (_isLoading)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16.0),
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else
-                    Row(
+                  Container(
+                    height: 200,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          AppColors.kNavy,
+                          AppColors.kPrimary.withOpacity(0.6),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: -48,
+                    child: Stack(
                       children: [
-                        Expanded(
-                          child: _buildStatCard(
-                            _userStats != null ? '${_userStats!.totalSessions}' : '--',
-                            'Sessions',
-                          ),
+                        const CircleAvatar(
+                          radius: 48,
+                          backgroundColor: AppColors.kLightBlue,
+                          child: Icon(Icons.person, color: AppColors.kNavy, size: 52),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _buildStatCard(
-                            _userStats != null ? '${_userStats!.totalMinutes}m' : '--',
-                            'Practiced',
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _buildStatCard(
-                            _userStreak != null ? '${_userStreak!.currentStreak}' : '--',
-                            'Streak',
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: AppColors.kPrimary,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppColors.kSteelBlue, width: 2),
+                            ),
+                            child: const Icon(Icons.camera_alt, color: Colors.white, size: 14),
                           ),
                         ),
                       ],
                     ),
-                  const SizedBox(height: 24),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 60),
 
-                  // ─── STREAK DETAILS CARD ───
-                  if (!_isLoading && _userStreak != null)
-                    GlassCard(
-                      borderRadius: 18,
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // ─── NAME & BIO ───
+              Center(
+                child: Text(
+                  fullName.isNotEmpty ? fullName : 'Guest User',
+                  style: GoogleFonts.poppins(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.kNavy,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Center(
+                child: Text(
+                  email.isNotEmpty ? email : 'Yoga Enthusiast',
+                  style: TextStyle(
+                    color: AppColors.kNavy.withOpacity(0.65),
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // ─── ERROR BANNER ───
+                    if (_errorMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16.0),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Row(
                             children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Best Streak: ${_userStreak!.longestStreak} days',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.kNavy,
-                                    ),
-                                  ),
-                                  Text(
-                                    '${_userStreak!.totalDaysPracticed} total days practiced',
-                                    style: TextStyle(
-                                      color: AppColors.kNavy.withOpacity(0.65),
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
+                              Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _errorMessage!,
+                                  style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+                                ),
                               ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                    // ─── STATS ROW ───
+                    if (_isLoading)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16.0),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildStatCard(
+                              _userStats != null ? '${_userStats!.totalSessions}' : '--',
+                              'Sessions',
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _buildStatCard(
+                              _userStats != null ? '${_userStats!.totalMinutes}m' : '--',
+                              'Practiced',
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _buildStatCard(
+                              _userStreak != null ? '${_userStreak!.currentStreak}' : '--',
+                              'Streak',
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+
+                    // ─── STREAK DETAILS CARD ───
+                    if (!_isLoading && _userStreak != null) ...[
+                      GlassCard(
+                        borderRadius: 18,
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Best Streak: ${_userStreak!.longestStreak} days',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.kNavy,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${_userStreak!.totalDaysPracticed} total days practiced',
+                                      style: TextStyle(
+                                        color: AppColors.kNavy.withOpacity(0.65),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.ac_unit, color: AppColors.kSkyBlue, size: 16),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${_userStreak!.availableFreezes} freeze${_userStreak!.availableFreezes == 1 ? '' : 's'}',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.kSkyBlue,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: LinearProgressIndicator(
+                                value: _userStreak!.longestStreak > 0
+                                    ? (_userStreak!.currentStreak / _userStreak!.longestStreak).clamp(0.0, 1.0)
+                                    : 0.0,
+                                minHeight: 8,
+                                backgroundColor: AppColors.kPrimary.withOpacity(0.15),
+                                color: AppColors.kSkyBlue,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _userStreak!.currentStreak >= _userStreak!.longestStreak && _userStreak!.currentStreak > 0
+                                  ? '🏆 Personal best!'
+                                  : '${_userStreak!.currentStreak} / ${_userStreak!.longestStreak} days to personal best',
+                              style: TextStyle(
+                                color: AppColors.kNavy.withOpacity(0.65),
+                                fontSize: 12,
+                              ),
+                            ),
+                            if (_userStats?.favoritePose != null) ...[
+                              const SizedBox(height: 12),
                               Row(
                                 children: [
-                                  const Icon(Icons.ac_unit, color: AppColors.kSkyBlue, size: 16),
-                                  const SizedBox(width: 4),
+                                  const Icon(Icons.star, color: AppColors.kSkyBlue, size: 16),
+                                  const SizedBox(width: 6),
                                   Text(
-                                    '${_userStreak!.availableFreezes} freeze${_userStreak!.availableFreezes == 1 ? '' : 's'}',
+                                    'Favourite Pose: ${_userStats!.favoritePose!.poseName} (×${_userStats!.favoritePose!.count})',
                                     style: GoogleFonts.poppins(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.kSkyBlue,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.kNavy,
                                     ),
                                   ),
                                 ],
                               ),
                             ],
-                          ),
-                          const SizedBox(height: 12),
-                          // Progress toward longest streak
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: LinearProgressIndicator(
-                              value: _userStreak!.longestStreak > 0
-                                  ? (_userStreak!.currentStreak / _userStreak!.longestStreak).clamp(0.0, 1.0)
-                                  : 0.0,
-                              minHeight: 8,
-                              backgroundColor: AppColors.kPrimary.withOpacity(0.15),
-                              color: AppColors.kSkyBlue,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _userStreak!.currentStreak >= _userStreak!.longestStreak && _userStreak!.currentStreak > 0
-                                ? '🏆 Personal best!'
-                                : '${_userStreak!.currentStreak} / ${_userStreak!.longestStreak} days to personal best',
-                            style: TextStyle(
-                              color: AppColors.kNavy.withOpacity(0.65),
-                              fontSize: 12,
-                            ),
-                          ),
-                          if (_userStats?.favoritePose != null) ...[
-                            const SizedBox(height: 12),
-                            Row(
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+
+                    // ─── YOUR INSIGHTS ───
+                    if (!_isLoading && _insights.isNotEmpty) ...[
+                      Text(
+                        "Your Insights",
+                        style: GoogleFonts.poppins(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.kNavy,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ..._insights.map((insight) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10.0),
+                          child: GlassCard(
+                            borderRadius: 14,
+                            padding: const EdgeInsets.all(14),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Icon(Icons.star, color: AppColors.kSkyBlue, size: 16),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Favourite Pose: ${_userStats!.favoritePose!.poseName} (×${_userStats!.favoritePose!.count})',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppColors.kNavy,
+                                const Icon(Icons.lightbulb_outline, color: AppColors.kSkyBlue, size: 24),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    insight,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.kNavy,
+                                      height: 1.5,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  if (!_isLoading && _userStreak != null)
-                    const SizedBox(height: 24),
+                          ),
+                        );
+                      }).toList(),
+                      const SizedBox(height: 14),
+                    ],
 
-                  // ─── MENU ───
-                  GlassCard(
-                    borderRadius: 18,
-                    padding: EdgeInsets.zero,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: Column(
-                        children: [
-                          _buildMenuItem(Icons.favorite_border, 'Saved Poses', () {}),
-                          _buildDivider(),
-                          _buildMenuItem(Icons.emoji_events_outlined, 'Achievements', () {}),
-                          _buildDivider(),
-                          _buildMenuItem(Icons.notifications_outlined, 'Notifications', () {}),
-                          _buildDivider(),
-                          _buildMenuItem(Icons.settings_outlined, 'Settings', () {
-                            context.push('/settings');
-                          }),
-                          _buildDivider(),
-                          _buildMenuItem(Icons.help_outline, 'Help & Support', () {}),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // ─── LOGOUT ───
-                  GlassCard(
-                    borderRadius: 14,
-                    padding: EdgeInsets.zero,
-                    child: ListTile(
-                      leading: const Icon(Icons.logout, color: Colors.redAccent, size: 22),
-                      title: Text(
-                        'Log Out',
+                    // ─── SESSION HISTORY ───
+                    if (!_isLoading) ...[
+                      Text(
+                        "Session History",
                         style: GoogleFonts.poppins(
-                          fontSize: 15,
+                          fontSize: 17,
                           fontWeight: FontWeight.w600,
-                          color: Colors.redAccent,
+                          color: AppColors.kNavy,
                         ),
                       ),
-                      onTap: () async {
-                        final router = GoRouter.of(context);
-                        await Provider.of<AuthProvider>(context, listen: false).logout();
-                        if (mounted) router.go('/login');
-                      },
+                      const SizedBox(height: 12),
+                      if (_sessions.isEmpty)
+                        GlassCard(
+                          borderRadius: 14,
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            "No sessions recorded yet.",
+                            style: TextStyle(
+                              color: AppColors.kNavy.withOpacity(0.65),
+                              fontSize: 13,
+                            ),
+                          ),
+                        )
+                      else ...[
+                        ..._sessions.map((session) {
+                          final durationMin = (session.durationSeconds / 60).round();
+                          final dateStr = session.startTime != null ? _formatDate(session.startTime!) : 'Unknown date';
+                          final isDone = session.completed;
+                          final poseName = session.pose.name.isNotEmpty ? session.pose.name : 'Yoga Session';
+                          
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10.0),
+                            child: GlassCard(
+                              borderRadius: 14,
+                              padding: const EdgeInsets.all(14),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 46,
+                                    height: 46,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.kPrimary.withOpacity(0.25),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Icon(Icons.history, color: AppColors.kSkyBlue, size: 24),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          poseName,
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.kNavy,
+                                          ),
+                                        ),
+                                        Text(
+                                          "$dateStr • $durationMin min • ${session.accuracyAverage}% accuracy",
+                                          style: TextStyle(
+                                            color: AppColors.kNavy.withOpacity(0.65),
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: isDone ? Colors.green.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      isDone ? "Done" : "Partial",
+                                      style: TextStyle(
+                                        color: isDone ? Colors.green.shade700 : Colors.orange.shade800,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                        if (_sessionMeta != null && _currentPage < _sessionMeta!.pages)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8.0),
+                            child: TextButton(
+                              onPressed: _loadMoreSessions,
+                              style: TextButton.styleFrom(
+                                backgroundColor: AppColors.kPrimary.withOpacity(0.1),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              child: Text(
+                                "Load More",
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.kPrimary,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                      const SizedBox(height: 24),
+                    ],
+
+                    // ─── MENU ───
+                    GlassCard(
+                      borderRadius: 18,
+                      padding: EdgeInsets.zero,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: Column(
+                          children: [
+                            _buildMenuItem(Icons.favorite_border, 'Saved Poses', () {}),
+                            _buildDivider(),
+                            _buildMenuItem(Icons.emoji_events_outlined, 'Achievements', () {}),
+                            _buildDivider(),
+                            _buildMenuItem(Icons.notifications_outlined, 'Notifications', () {}),
+                            _buildDivider(),
+                            _buildMenuItem(Icons.settings_outlined, 'Settings', () {
+                              context.push('/settings');
+                            }),
+                            _buildDivider(),
+                            _buildMenuItem(Icons.help_outline, 'Help & Support', () {}),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 20),
+
+                    // ─── LOGOUT ───
+                    GlassCard(
+                      borderRadius: 14,
+                      padding: EdgeInsets.zero,
+                      child: ListTile(
+                        leading: const Icon(Icons.logout, color: Colors.redAccent, size: 22),
+                        title: Text(
+                          'Log Out',
+                          style: GoogleFonts.poppins(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.redAccent,
+                          ),
+                        ),
+                        onTap: () async {
+                          final router = GoRouter.of(context);
+                          await Provider.of<AuthProvider>(context, listen: false).logout();
+                          if (mounted) router.go('/login');
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: const GlassBottomNav(),
@@ -384,5 +624,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       indent: 16,
       endIndent: 16,
     );
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date).inDays;
+    if (diff == 0) return "Today";
+    if (diff == 1) return "Yesterday";
+    if (diff < 7) return "${diff}d ago";
+    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return "${months[date.month - 1]} ${date.day}";
   }
 }

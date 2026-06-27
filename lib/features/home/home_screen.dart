@@ -22,35 +22,56 @@ class _HomeScreenState extends State<HomeScreen> {
   final AnalyticsService _analyticsService = AnalyticsService();
   UserStats? _userStats;
   UserStreak? _userStreak;
+  List<SessionRecord> _recentSessions = [];
   bool _isLoadingStats = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _fetchData();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _fetchData());
   }
 
   Future<void> _fetchData() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userId = authProvider.user?.id;
     if (userId == null) {
-      setState(() => _isLoadingStats = false);
+      if (mounted) {
+        setState(() {
+          _isLoadingStats = false;
+          _errorMessage = "User not logged in.";
+        });
+      }
       return;
     }
 
+    if (mounted) {
+      setState(() {
+        _isLoadingStats = true;
+        _errorMessage = null;
+      });
+    }
+
     try {
-      final stats = await _analyticsService.fetchUserStats(userId);
-      final streak = await _analyticsService.fetchUserStreak(userId);
+      final results = await Future.wait([
+        _analyticsService.fetchUserStats(userId),
+        _analyticsService.fetchUserStreak(userId),
+        _analyticsService.fetchUserSessions(userId, page: 1, limit: 3),
+      ]);
       if (mounted) {
         setState(() {
-          _userStats = stats;
-          _userStreak = streak;
+          _userStats = results[0] as UserStats;
+          _userStreak = results[1] as UserStreak;
+          _recentSessions = (results[2] as SessionResponse).sessions;
           _isLoadingStats = false;
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoadingStats = false);
+        setState(() {
+          _isLoadingStats = false;
+          _errorMessage = e.toString();
+        });
       }
     }
   }
@@ -65,258 +86,299 @@ class _HomeScreenState extends State<HomeScreen> {
       extendBody: true,
       body: SafeArea(
         bottom: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0, bottom: 90.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // ─── SECTION 1: TOP BAR ───
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Good Morning 🌿",
-                        style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          fontWeight: FontWeight.normal,
-                          color: AppColors.kNavy.withOpacity(0.65),
-                        ),
-                      ),
-                      Text(
-                        name,
-                        style: GoogleFonts.poppins(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.kNavy,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: const [
-                      Icon(Icons.notifications_outlined, color: AppColors.kNavy, size: 24),
-                      SizedBox(width: 12),
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: AppColors.kPrimary,
-                        child: Icon(Icons.person, color: Colors.white, size: 20),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              // ─── DASHBOARD STATS ───
-              if (_isLoadingStats)
-                const Center(child: Padding(
-                  padding: EdgeInsets.all(20.0),
-                  child: CircularProgressIndicator(),
-                ))
-              else if (_userStats != null)
+        child: RefreshIndicator(
+          onRefresh: _fetchData,
+          color: AppColors.kPrimary,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0, bottom: 90.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ─── SECTION 1: TOP BAR ───
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Expanded(child: _buildStatCard("${_userStats!.totalMinutes}m", "Practiced")),
-                    const SizedBox(width: 10),
-                    Expanded(child: _buildStatCard("${_userStats!.totalSessions}", "Sessions")),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _buildStatCard(
-                        _userStats!.favoritePose?.poseName.split(' ').first ?? "-", 
-                        "Fav Pose",
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Good Morning 🌿",
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.normal,
+                            color: AppColors.kNavy.withOpacity(0.65),
+                          ),
+                        ),
+                        Text(
+                          name,
+                          style: GoogleFonts.poppins(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.kNavy,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: const [
+                        Icon(Icons.notifications_outlined, color: AppColors.kNavy, size: 24),
+                        SizedBox(width: 12),
+                        CircleAvatar(
+                          radius: 20,
+                          backgroundColor: AppColors.kPrimary,
+                          child: Icon(Icons.person, color: Colors.white, size: 20),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                if (_errorMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _errorMessage!,
+                              style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                // ─── DASHBOARD STATS ───
+                /*
+                if (_isLoadingStats)
+                  const Center(child: Padding(
+                    padding: EdgeInsets.all(20.0),
+                    child: CircularProgressIndicator(),
+                  ))
+                else if (_userStats != null) ...[
+                  Row(
+                    children: [
+                      Expanded(child: _buildStatCard("${_userStats!.totalMinutes}m", "Practiced")),
+                      const SizedBox(width: 10),
+                      Expanded(child: _buildStatCard("${_userStats!.totalSessions}", "Sessions")),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _buildStatCard(
+                          _userStats!.favoritePose?.poseName.split(' ').first ?? "-", 
+                          "Fav Pose",
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                ],
+                */
+
+                // ─── SECTION 2: STREAK CARD ───
+                if (!_isLoadingStats && _userStreak != null) ...[
+                  GlassCard(
+                    borderRadius: 18,
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: AppColors.kPrimary.withOpacity(0.25),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(Icons.local_fire_department, color: AppColors.kSkyBlue, size: 26),
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "${_userStreak!.currentStreak} Day Streak",
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.kNavy,
+                                  ),
+                                ),
+                                Text(
+                                  _userStreak!.currentStreak >= _userStreak!.longestStreak && _userStreak!.currentStreak > 0
+                                      ? "Personal Best!"
+                                      : "Longest: ${_userStreak!.longestStreak} days",
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.normal,
+                                    color: AppColors.kNavy.withOpacity(0.65),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const Text("🏆", style: TextStyle(fontSize: 30)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+
+                // ─── SECTION 3: TODAY'S SESSION ───
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "Today's Session",
+                      style: GoogleFonts.poppins(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.kNavy,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {},
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text(
+                        "See All",
+                        style: TextStyle(
+                          color: AppColors.kSkyBlue,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                   ],
                 ),
-              if (!_isLoadingStats && _userStats != null)
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 170,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    clipBehavior: Clip.none,
+                    children: [
+                      _buildPoseCard(context, posesData[0]),
+                      const SizedBox(width: 12),
+                      _buildPoseCard(context, posesData[1]),
+                      const SizedBox(width: 12),
+                      _buildPoseCard(context, posesData[2]),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 24),
 
-              // ─── SECTION 2: STREAK CARD ───
-              if (!_isLoadingStats && _userStreak != null)
+                // ─── SECTION 4: START DETECTION ───
                 GlassCard(
                   borderRadius: 18,
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(20),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: AppColors.kPrimary.withOpacity(0.25),
-                              borderRadius: BorderRadius.circular(12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Start Pose\nDetection",
+                              style: GoogleFonts.poppins(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.kNavy,
+                                height: 1.2,
+                              ),
                             ),
-                            child: const Icon(Icons.local_fire_department, color: AppColors.kSkyBlue, size: 26),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "${_userStreak!.currentStreak} Day Streak",
-                                style: GoogleFonts.poppins(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.kNavy,
+                            const SizedBox(height: 8),
+                            Text(
+                              "Point camera at yourself to begin",
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                fontWeight: FontWeight.normal,
+                                color: AppColors.kNavy.withOpacity(0.65),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            GestureDetector(
+                              onTap: () {
+                                PoseSelectionSheet.show(context);
+                              },
+                              child: Container(
+                                height: 40,
+                                width: 130,
+                                decoration: BoxDecoration(
+                                  color: AppColors.kPrimary,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      "Start Now",
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    const Icon(Icons.arrow_forward, color: Colors.white, size: 16),
+                                  ],
                                 ),
                               ),
-                              Text(
-                                _userStreak!.currentStreak >= _userStreak!.longestStreak && _userStreak!.currentStreak > 0
-                                    ? "Personal Best!"
-                                    : "Longest: ${_userStreak!.longestStreak} days",
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.normal,
-                                  color: AppColors.kNavy.withOpacity(0.65),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                            ),
+                          ],
+                        ),
                       ),
-                      const Text("🏆", style: TextStyle(fontSize: 30)),
+                      Icon(
+                        Icons.camera_enhance_outlined,
+                        size: 72,
+                        color: AppColors.kNavy.withOpacity(0.08),
+                      ),
                     ],
                   ),
                 ),
-              if (!_isLoadingStats && _userStreak != null)
                 const SizedBox(height: 24),
 
-              // ─── SECTION 3: TODAY'S SESSION ───
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    "Today's Session",
-                    style: GoogleFonts.poppins(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.kNavy,
-                    ),
+                // ─── SECTION 5: RECENT SESSIONS ───
+                Text(
+                  "Recent Sessions",
+                  style: GoogleFonts.poppins(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.kNavy,
                   ),
-                  TextButton(
-                    onPressed: () {},
-                    style: TextButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: const Text(
-                      "See All",
-                      style: TextStyle(
-                        color: AppColors.kSkyBlue,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
+                ),
+                const SizedBox(height: 12),
+                if (_recentSessions.isNotEmpty)
+                  ..._recentSessions.map((session) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10.0),
+                      child: _buildRecentSessionTileFromRecord(session),
+                    );
+                  }).toList()
+                else ...[
+                  _buildRecentSessionTileHardcoded("Sun Salutation", "Today", 12, 91),
+                  const SizedBox(height: 10),
+                  _buildRecentSessionTileHardcoded("Warrior II", "Yesterday", 8, 85),
                 ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 170,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  clipBehavior: Clip.none,
-                  children: [
-                    _buildPoseCard(context, posesData[0]),
-                    const SizedBox(width: 12),
-                    _buildPoseCard(context, posesData[1]),
-                    const SizedBox(width: 12),
-                    _buildPoseCard(context, posesData[2]),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // ─── SECTION 4: START DETECTION ───
-              GlassCard(
-                borderRadius: 18,
-                padding: const EdgeInsets.all(20),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Start Pose\nDetection",
-                            style: GoogleFonts.poppins(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.kNavy,
-                              height: 1.2,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            "Point camera at yourself to begin",
-                            style: GoogleFonts.poppins(
-                              fontSize: 13,
-                              fontWeight: FontWeight.normal,
-                              color: AppColors.kNavy.withOpacity(0.65),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          GestureDetector(
-                            onTap: () {
-                              PoseSelectionSheet.show(context);
-                            },
-                            child: Container(
-                              height: 40,
-                              width: 130,
-                              decoration: BoxDecoration(
-                                color: AppColors.kPrimary,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    "Start Now",
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  const Icon(Icons.arrow_forward, color: Colors.white, size: 16),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      Icons.camera_enhance_outlined,
-                      size: 72,
-                      color: AppColors.kNavy.withOpacity(0.08),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // ─── SECTION 5: RECENT SESSIONS ───
-              Text(
-                "Recent Sessions",
-                style: GoogleFonts.poppins(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.kNavy,
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildRecentSessionTile("Sun Salutation"),
-              const SizedBox(height: 10),
-              _buildRecentSessionTile("Warrior II"),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -417,7 +479,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildRecentSessionTile(String poseName) {
+  Widget _buildRecentSessionTileFromRecord(SessionRecord session) {
+    final poseName = session.pose.name.isNotEmpty ? session.pose.name : 'Yoga Session';
+    final durationMin = (session.durationSeconds / 60).round();
+    final dateStr = session.startTime != null ? _formatDate(session.startTime!) : 'Unknown date';
+    return _buildRecentSessionTileHardcoded(poseName, dateStr, durationMin, session.accuracyAverage);
+  }
+
+  Widget _buildRecentSessionTileHardcoded(String poseName, String dateStr, int durationMin, int accuracy) {
     return GlassCard(
       borderRadius: 14,
       padding: const EdgeInsets.all(14),
@@ -446,7 +515,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 Text(
-                  "Today • 12 min • 91% accuracy",
+                  "$dateStr • $durationMin min • $accuracy% accuracy",
                   style: TextStyle(
                     color: AppColors.kNavy.withOpacity(0.65),
                     fontSize: 12,
@@ -474,5 +543,15 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date).inDays;
+    if (diff == 0) return "Today";
+    if (diff == 1) return "Yesterday";
+    if (diff < 7) return "${diff}d ago";
+    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return "${months[date.month - 1]} ${date.day}";
   }
 }
