@@ -133,9 +133,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final themeProvider = context.watch<ThemeProvider>();
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
         leading: GestureDetector(
           onTap: () => context.pop(),
@@ -146,7 +146,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           style: GoogleFonts.poppins(
             fontSize: 18,
             fontWeight: FontWeight.w600,
-            color: Theme.of(context).appBarTheme.titleTextStyle?.color ?? AppColors.kNavy,
+            color: AppColors.kNavy,
           ),
         ),
       ),

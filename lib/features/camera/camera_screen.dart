@@ -54,6 +54,7 @@ class _CameraScreenState extends State<CameraScreen> {
   String? _sessionError;
   DateTime? _lastBeepTime;
   bool _isDisposed = false;
+  bool _isEndingSession = false;
 
   @override
   void initState() {
@@ -328,6 +329,9 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 
   Future<void> _endSession() async {
+    if (_isEndingSession) return;
+    _isEndingSession = true;
+
     _cameraController?.stopImageStream();
     if (_sessionId != null) {
       try {
@@ -630,15 +634,7 @@ class _CameraScreenState extends State<CameraScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          GlassCard(
-                            borderRadius: 26,
-                            padding: EdgeInsets.zero,
-                            child: const SizedBox(
-                              width: 52,
-                              height: 52,
-                              child: Center(child: Icon(Icons.flip_camera_ios, color: AppColors.kNavy, size: 22)),
-                            ),
-                          ),
+                          const SizedBox(width: 52), // Placeholder to maintain center alignment
                           GestureDetector(
                             onTap: () {},
                             child: Container(
@@ -656,7 +652,7 @@ class _CameraScreenState extends State<CameraScreen> {
                             borderRadius: 26,
                             padding: EdgeInsets.zero,
                             child: GestureDetector(
-                              onTap: _endSession,
+                              onTap: _isEndingSession ? null : _endSession,
                               child: const SizedBox(
                                 width: 52,
                                 height: 52,

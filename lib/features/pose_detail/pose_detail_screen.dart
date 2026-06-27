@@ -27,11 +27,19 @@ class _PoseDetailScreenState extends State<PoseDetailScreen> {
   ChewieController? _chewieController;
   bool _videoInitialized = false;
   bool _videoError = false;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _fetchPoseDetails();
+    _scrollController.addListener(() {
+      if (_scrollController.hasClients) {
+        if (_scrollController.position.pixels >= 280 - kToolbarHeight) {
+          _videoController?.pause();
+        }
+      }
+    });
   }
 
   Future<void> _fetchPoseDetails() async {
@@ -86,6 +94,7 @@ class _PoseDetailScreenState extends State<PoseDetailScreen> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _chewieController?.dispose();
     _videoController?.dispose();
     super.dispose();
@@ -172,6 +181,7 @@ class _PoseDetailScreenState extends State<PoseDetailScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: CustomScrollView(
+        controller: _scrollController,
         slivers: [
           // ─── SLIVER APP BAR ───
           SliverAppBar(
@@ -224,55 +234,58 @@ class _PoseDetailScreenState extends State<PoseDetailScreen> {
                 ),
               ),
               titlePadding: const EdgeInsets.only(left: 16, bottom: 16),
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Container(color: AppColors.kPrimary.withOpacity(0.05)),
-                  if (_videoInitialized && _chewieController != null)
-                    Chewie(controller: _chewieController!)
-                  else if (_videoError)
-                    Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.videocam_off, size: 40, color: Colors.red),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Video unavailable',
-                            style: GoogleFonts.poppins(
-                              color: AppColors.kNavy.withOpacity(0.7),
-                              fontSize: 12,
+              background: ClipRect(
+                key: const ValueKey('video_background'),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Container(color: AppColors.kPrimary.withOpacity(0.05)),
+                    if (_videoInitialized && _chewieController != null)
+                      Chewie(controller: _chewieController!)
+                    else if (_videoError)
+                      Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.videocam_off, size: 40, color: Colors.red),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Video unavailable',
+                              style: GoogleFonts.poppins(
+                                color: AppColors.kNavy.withOpacity(0.7),
+                                fontSize: 12,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
+                      )
+                    else
+                      Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const SizedBox(
+                              width: 32,
+                              height: 32,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: AppColors.kPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              pose.videoUrl != null ? 'Loading video...' : 'No video available',
+                              style: GoogleFonts.poppins(
+                                color: AppColors.kNavy.withOpacity(0.7),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    )
-                  else
-                    Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const SizedBox(
-                            width: 32,
-                            height: 32,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: AppColors.kPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            pose.videoUrl != null ? 'Loading video...' : 'No video available',
-                            style: GoogleFonts.poppins(
-                              color: AppColors.kNavy.withOpacity(0.7),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

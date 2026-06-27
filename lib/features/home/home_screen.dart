@@ -12,6 +12,7 @@ import '../../core/network/analytics_service.dart';
 import '../../core/models/analytics_models.dart';
 import '../auth/auth_provider.dart';
 import '../../core/widgets/session_history_sheet.dart';
+import '../explore/pose_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -25,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
   UserStats? _userStats;
   UserStreak? _userStreak;
   List<SessionRecord> _recentSessions = [];
+  List<PoseModel> _recommendedPoses = [];
   bool _isLoadingStats = true;
   String? _errorMessage;
   int _unreadCount = 0;
@@ -60,12 +62,26 @@ class _HomeScreenState extends State<HomeScreen> {
         _analyticsService.fetchUserStats(userId),
         _analyticsService.fetchUserStreak(userId),
         _analyticsService.fetchUserSessions(userId, page: 1, limit: 3),
+        PoseService().getPoses(limit: 20, page: 1),
       ]);
       if (mounted) {
         setState(() {
           _userStats = results[0] as UserStats;
           _userStreak = results[1] as UserStreak;
           _recentSessions = (results[2] as SessionResponse).sessions;
+          
+          final posesResponse = results[3] as Map<String, dynamic>;
+          final List<dynamic>? posesList = posesResponse['data']?['poses'];
+          if (posesList != null && posesList.isNotEmpty) {
+            final allPoses = posesList.map((p) => PoseModel.fromJson(p as Map<String, dynamic>)).toList();
+            allPoses.shuffle();
+            _recommendedPoses = allPoses.take(3).toList();
+          } else {
+            final fallback = List<PoseModel>.from(posesData);
+            fallback.shuffle();
+            _recommendedPoses = fallback.take(3).toList();
+          }
+          
           _isLoadingStats = false;
         });
       }
@@ -283,12 +299,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 24),
                 ],
 
-                // ─── SECTION 3: TODAY'S SESSION ───
+                // ─── SECTION 3: RECOMMENDATION SESSIONS ───
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      "Today's Session",
+                      "Recommendation Sessions",
                       style: GoogleFonts.poppins(
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
@@ -296,7 +312,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     TextButton(
-                      onPressed: () {},
+                      onPressed: () => context.go('/explore'),
                       style: TextButton.styleFrom(
                         padding: EdgeInsets.zero,
                         minimumSize: Size.zero,
@@ -319,11 +335,20 @@ class _HomeScreenState extends State<HomeScreen> {
                     scrollDirection: Axis.horizontal,
                     clipBehavior: Clip.none,
                     children: [
-                      _buildPoseCard(context, posesData[0]),
-                      const SizedBox(width: 12),
-                      _buildPoseCard(context, posesData[1]),
-                      const SizedBox(width: 12),
-                      _buildPoseCard(context, posesData[2]),
+                      if (_recommendedPoses.isNotEmpty)
+                        ..._recommendedPoses.map((pose) {
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 12.0),
+                            child: _buildPoseCard(context, pose),
+                          );
+                        }).toList()
+                      else
+                        ...posesData.take(3).map((pose) {
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 12.0),
+                            child: _buildPoseCard(context, pose),
+                          );
+                        }).toList(),
                     ],
                   ),
                 ),
@@ -511,7 +536,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildPoseCard(BuildContext context, PoseModel pose) {
     return GestureDetector(
-      onTap: () => PoseSelectionSheet.show(context),
+      onTap: () => context.push('/camera', extra: {'poseId': pose.id}),
       child: SizedBox(
         width: 145,
         child: GlassCard(

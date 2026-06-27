@@ -66,7 +66,7 @@ class GlassBottomNav extends StatelessWidget {
           children: [
             _buildNavItem(context, 0, Icons.home_rounded, Icons.home_outlined, 'Home', currentIndex),
             _buildNavItem(context, 1, Icons.explore_rounded, Icons.explore_outlined, 'Explore', currentIndex),
-            _buildCenterItem(context),
+            _buildNavItem(context, 2, Icons.camera_alt, Icons.camera_alt, 'Camera', currentIndex),
             _buildNavItem(context, 3, Icons.person_rounded, Icons.person_outline_rounded, 'Profile', currentIndex),
           ],
         ),
@@ -88,70 +88,23 @@ class GlassBottomNav extends StatelessWidget {
       onTap: () => _onTap(context, index),
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        width: 72,
+        width: 70,
         height: 64,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOut,
-              width: 44,
-              height: 32,
-              decoration: BoxDecoration(
-                color: isActive ? AppColors.kPrimary.withOpacity(0.1) : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(
-                child: Icon(
-                  isActive ? activeIcon : inactiveIcon,
-                  color: isActive ? AppColors.kPrimary : AppColors.kNavy.withOpacity(0.4),
-                  size: 22,
-                ),
-              ),
+            Icon(
+              isActive ? activeIcon : inactiveIcon,
+              color: isActive ? AppColors.kPrimary : AppColors.kNavy.withOpacity(0.45),
+              size: 24,
             ),
             const SizedBox(height: 4),
             Text(
               label,
               style: GoogleFonts.poppins(
-                color: isActive ? AppColors.kPrimary : AppColors.kNavy.withOpacity(0.4),
+                color: isActive ? AppColors.kPrimary : AppColors.kNavy.withOpacity(0.45),
                 fontSize: 11,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCenterItem(BuildContext context) {
-    return GestureDetector(
-      onTap: () => _onTap(context, 2),
-      child: SizedBox(
-        width: 72,
-        height: 64,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: AppColors.kPrimary,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.kPrimary.withOpacity(0.35),
-                    blurRadius: 14,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.camera_alt_rounded,
-                color: Colors.white,
-                size: 26,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
           ],
