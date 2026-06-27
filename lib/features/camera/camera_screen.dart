@@ -12,6 +12,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/glass_card.dart';
+import '../../core/audio/music_service.dart';
 import '../session/session_service.dart';
 import '../../core/network/api_client.dart';
 
@@ -90,6 +91,8 @@ class _CameraScreenState extends State<CameraScreen> {
       ),
     );
     await _audioPlayer.setReleaseMode(ReleaseMode.release);
+    // Pause background music while camera is active so the beep has full focus
+    await MusicService.instance.pause();
   }
 
   Future<void> _initCamera() async {
@@ -318,7 +321,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
     _lastBeepTime = now;
     if (!_isDisposed) {
-      _audioPlayer.play(AssetSource('audio/beep.wav'), volume: 0.1).catchError((e) {
+      _audioPlayer.play(AssetSource('audio/beep.wav'), volume: 1.0).catchError((e) {
         debugPrint('[Beep] play() failed: $e');
       });
     }
@@ -350,6 +353,7 @@ class _CameraScreenState extends State<CameraScreen> {
     _cameraController?.dispose();
     _poseDetector.close();
     _audioPlayer.dispose();
+    MusicService.instance.resume();
     if (_sessionId != null) {
       _sessionService.endSession(sessionId: _sessionId!);
     }

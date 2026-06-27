@@ -7,6 +7,9 @@ import '../../core/widgets/glass_card.dart';
 import '../../core/models/settings_model.dart';
 import '../../core/models/analytics_models.dart';
 import '../../core/network/analytics_service.dart';
+import '../../core/providers/settings_provider.dart';
+import '../../core/providers/theme_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../auth/auth_provider.dart';
 import 'settings_service.dart';
 
@@ -23,9 +26,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // Preferences state
   bool _pushNotifications = true;
-  bool _soundEffects = true;
   bool _hapticFeedback = false;
-  bool _mirrorMode = false;
 
   // Analytics state
   List<String> _insights = [];
@@ -128,8 +129,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final settingsProvider = context.watch<SettingsProvider>();
+    final themeProvider = context.watch<ThemeProvider>();
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -142,7 +146,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           style: GoogleFonts.poppins(
             fontSize: 18,
             fontWeight: FontWeight.w600,
-            color: AppColors.kNavy,
+            color: Theme.of(context).appBarTheme.titleTextStyle?.color ?? AppColors.kNavy,
           ),
         ),
       ),
@@ -156,10 +160,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildInsightsSection(),
             const SizedBox(height: 20),
 
-            // ─── SECTION: Session History ───
-            _buildSectionHeader("Session History"),
-            _buildSessionHistorySection(),
-            const SizedBox(height: 20),
+            // // ─── SECTION: Session History ───
+            // _buildSectionHeader("Session History"),
+            // _buildSessionHistorySection(),
+            // const SizedBox(height: 20),
 
             // ─── SECTION: Account ───
             _buildSectionHeader("Account"),
@@ -206,9 +210,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                     _buildDivider(),
-                    _buildNavTile(Icons.lock_outline, "Change Password", null, () {}),
+                    _buildNavTile(Icons.lock_outline, "Change Password", null, _showChangePasswordDialog),
                     _buildDivider(),
-                    _buildNavTile(Icons.language, "Language", "English", () {}),
+                    _buildNavTile(Icons.language, "Language", settingsProvider.language, _showLanguageBottomSheet),
                   ],
                 ),
               ),
@@ -234,8 +238,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _buildSwitchTile(
                       Icons.volume_up_outlined,
                       "Sound Effects",
-                      _soundEffects,
-                      (v) => setState(() => _soundEffects = v),
+                      settingsProvider.soundEffects,
+                      (v) => settingsProvider.setSoundEffects(v),
                     ),
                     _buildDivider(),
                     _buildSwitchTile(
@@ -256,8 +260,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                       trailing: Switch(
-                        value: true,
-                        onChanged: null,
+                        value: themeProvider.isDarkMode,
+                        onChanged: (v) => themeProvider.toggleTheme(v),
                         activeColor: AppColors.kPrimary,
                         activeTrackColor: AppColors.kPrimary.withOpacity(0.4),
                         inactiveThumbColor: AppColors.kNavy.withOpacity(0.3),
@@ -279,16 +283,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 borderRadius: BorderRadius.circular(18),
                 child: Column(
                   children: [
-                    _buildNavTile(Icons.camera_alt_outlined, "Camera Quality", "HD 1080p", () {}),
+                    _buildNavTile(Icons.camera_alt_outlined, "Camera Quality", settingsProvider.cameraQuality, _showCameraQualityBottomSheet),
                     _buildDivider(),
                     _buildSwitchTile(
                       Icons.flip,
                       "Mirror Mode",
-                      _mirrorMode,
-                      (v) => setState(() => _mirrorMode = v),
+                      settingsProvider.mirrorMode,
+                      (v) => settingsProvider.setMirrorMode(v),
                     ),
                     _buildDivider(),
-                    _buildNavTile(Icons.speed_outlined, "Detection Speed", "Balanced", () {}),
+                    _buildNavTile(Icons.speed_outlined, "Detection Speed", settingsProvider.detectionSpeed, _showDetectionSpeedBottomSheet),
                   ],
                 ),
               ),
@@ -323,9 +327,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     _buildDivider(),
-                    _buildNavTile(Icons.privacy_tip_outlined, "Privacy Policy", null, () {}),
+                    _buildNavTile(Icons.privacy_tip_outlined, "Privacy Policy", null, () => _launchURL('https://example.com/privacy')),
                     _buildDivider(),
-                    _buildNavTile(Icons.description_outlined, "Terms of Service", null, () {}),
+                    _buildNavTile(Icons.description_outlined, "Terms of Service", null, () => _launchURL('https://example.com/terms')),
                     _buildDivider(),
                     ListTile(
                       leading: Container(
@@ -346,7 +350,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                       trailing: Icon(Icons.chevron_right, color: AppColors.kNavy.withOpacity(0.50), size: 20),
-                      onTap: () {},
+                      onTap: () => _launchURL('https://example.com/rate'),
                     ),
                     _buildDivider(),
                     ListTile(
@@ -467,6 +471,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ─── SESSION HISTORY SECTION ───
+  // ignore: unused_element
   Widget _buildSessionHistorySection() {
     if (_isLoadingSessions) {
       return GlassCard(
@@ -624,6 +629,338 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return "${months[date.month - 1]} ${date.day}";
+  }
+
+  // ─── ACTION METHODS ───
+
+  Future<void> _launchURL(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open link. Please try again later.')),
+        );
+      }
+    }
+  }
+
+  void _showChangePasswordDialog() {
+    final formKey = GlobalKey<FormState>();
+    final currentCtrl = TextEditingController();
+    final newCtrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
+    bool obscureCurrent = true;
+    bool obscureNew = true;
+    bool obscureConfirm = true;
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.kPrimary.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.lock_outline, color: AppColors.kPrimary, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Text('Change Password',
+                style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.kNavy),
+              ),
+            ],
+          ),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: currentCtrl,
+                  obscureText: obscureCurrent,
+                  decoration: InputDecoration(
+                    labelText: 'Current Password',
+                    prefixIcon: const Icon(Icons.lock_outline, size: 18),
+                    suffixIcon: IconButton(
+                      icon: Icon(obscureCurrent ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 18),
+                      onPressed: () => setDialogState(() => obscureCurrent = !obscureCurrent),
+                    ),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: newCtrl,
+                  obscureText: obscureNew,
+                  decoration: InputDecoration(
+                    labelText: 'New Password',
+                    prefixIcon: const Icon(Icons.lock_outline, size: 18),
+                    suffixIcon: IconButton(
+                      icon: Icon(obscureNew ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 18),
+                      onPressed: () => setDialogState(() => obscureNew = !obscureNew),
+                    ),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Required';
+                    if (v.length < 6) return 'At least 6 characters';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: confirmCtrl,
+                  obscureText: obscureConfirm,
+                  decoration: InputDecoration(
+                    labelText: 'Confirm New Password',
+                    prefixIcon: const Icon(Icons.lock_outline, size: 18),
+                    suffixIcon: IconButton(
+                      icon: Icon(obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 18),
+                      onPressed: () => setDialogState(() => obscureConfirm = !obscureConfirm),
+                    ),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Required';
+                    if (v != newCtrl.text) return 'Passwords do not match';
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancel', style: GoogleFonts.poppins(color: AppColors.kNavy.withOpacity(0.6))),
+            ),
+            ElevatedButton(
+              onPressed: isLoading ? null : () async {
+                if (!formKey.currentState!.validate()) return;
+                setDialogState(() => isLoading = true);
+                final messenger = ScaffoldMessenger.of(this.context);
+                await Future.delayed(const Duration(seconds: 1)); // Simulate API call
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Row(children: [
+                        const Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
+                        const SizedBox(width: 8),
+                        Text('Password updated successfully!', style: GoogleFonts.poppins(fontSize: 13)),
+                      ]),
+                      backgroundColor: Colors.green,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.kPrimary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: isLoading
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : Text('Update', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showLanguageBottomSheet() {
+    final languages = ['English', 'Spanish', 'French', 'German', 'Arabic', 'Hindi', 'Japanese', 'Portuguese'];
+    final settingsProvider = context.read<SettingsProvider>();
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text('Select Language',
+                  style: GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.kNavy),
+                ),
+                const SizedBox(height: 12),
+                ...languages.map((lang) => ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                  title: Text(lang, style: GoogleFonts.poppins(fontSize: 14, color: AppColors.kNavy)),
+                  leading: Icon(
+                    Icons.language,
+                    color: settingsProvider.language == lang ? AppColors.kPrimary : AppColors.kNavy.withOpacity(0.4),
+                  ),
+                  trailing: settingsProvider.language == lang
+                      ? const Icon(Icons.check_circle, color: AppColors.kPrimary, size: 20)
+                      : null,
+                  onTap: () {
+                    settingsProvider.setLanguage(lang);
+                    Navigator.pop(context);
+                  },
+                )),
+                const SizedBox(height: 8),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showCameraQualityBottomSheet() {
+    final qualities = ['HD 720p', 'HD 1080p', '4K Ultra HD'];
+    final icons = [Icons.sd, Icons.hd, Icons.four_k];
+    final settingsProvider = context.read<SettingsProvider>();
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Camera Quality',
+              style: GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.kNavy),
+            ),
+            const SizedBox(height: 4),
+            Text('Higher quality uses more battery and storage.',
+              style: TextStyle(fontSize: 12, color: AppColors.kNavy.withOpacity(0.5)),
+            ),
+            const SizedBox(height: 12),
+            ...List.generate(qualities.length, (i) => ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              leading: Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(
+                  color: settingsProvider.cameraQuality == qualities[i]
+                      ? AppColors.kPrimary.withOpacity(0.15)
+                      : AppColors.kNavy.withOpacity(0.07),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icons[i],
+                  color: settingsProvider.cameraQuality == qualities[i] ? AppColors.kPrimary : AppColors.kNavy.withOpacity(0.4),
+                  size: 20,
+                ),
+              ),
+              title: Text(qualities[i], style: GoogleFonts.poppins(fontSize: 14, color: AppColors.kNavy)),
+              trailing: settingsProvider.cameraQuality == qualities[i]
+                  ? const Icon(Icons.check_circle, color: AppColors.kPrimary, size: 20)
+                  : null,
+              onTap: () {
+                settingsProvider.setCameraQuality(qualities[i]);
+                Navigator.pop(context);
+              },
+            )),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDetectionSpeedBottomSheet() {
+    final speeds = ['Fast', 'Balanced', 'Accurate'];
+    final descriptions = ['Lower accuracy, uses less CPU', 'Best for most users', 'Highest accuracy, uses more CPU'];
+    final icons = [Icons.bolt, Icons.balance, Icons.center_focus_strong];
+    final settingsProvider = context.read<SettingsProvider>();
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Detection Speed',
+              style: GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.kNavy),
+            ),
+            const SizedBox(height: 4),
+            Text('Choose your pose detection processing speed.',
+              style: TextStyle(fontSize: 12, color: AppColors.kNavy.withOpacity(0.5)),
+            ),
+            const SizedBox(height: 12),
+            ...List.generate(speeds.length, (i) => ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              leading: Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(
+                  color: settingsProvider.detectionSpeed == speeds[i]
+                      ? AppColors.kPrimary.withOpacity(0.15)
+                      : AppColors.kNavy.withOpacity(0.07),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icons[i],
+                  color: settingsProvider.detectionSpeed == speeds[i] ? AppColors.kPrimary : AppColors.kNavy.withOpacity(0.4),
+                  size: 20,
+                ),
+              ),
+              title: Text(speeds[i], style: GoogleFonts.poppins(fontSize: 14, color: AppColors.kNavy, fontWeight: FontWeight.w500)),
+              subtitle: Text(descriptions[i], style: TextStyle(fontSize: 11, color: AppColors.kNavy.withOpacity(0.5))),
+              trailing: settingsProvider.detectionSpeed == speeds[i]
+                  ? const Icon(Icons.check_circle, color: AppColors.kPrimary, size: 20)
+                  : null,
+              onTap: () {
+                settingsProvider.setDetectionSpeed(speeds[i]);
+                Navigator.pop(context);
+              },
+            )),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   // ─── SHARED HELPERS ───

@@ -281,59 +281,44 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 24),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Divider(color: Colors.white.withOpacity(0.2)),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                                child: Text(
-                                  "or continue with",
-                                  style: TextStyle(
-                                    color: Colors.white.withOpacity(0.65),
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: Divider(color: Colors.white.withOpacity(0.2)),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
-                          GlassCard(
-                            borderRadius: 14,
-                            padding: EdgeInsets.zero,
-                            child: InkWell(
-                              onTap: () {},
-                              borderRadius: BorderRadius.circular(14),
-                              child: SizedBox(
-                                height: 52,
-                                width: double.infinity,
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
-                                    Icon(
-                                      Icons.g_mobiledata,
-                                      color: Colors.white,
-                                      size: 36,
-                                    ),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      "Continue with Google",
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
+                          // ── GOOGLE SIGN-IN COMMENTED OUT ──
+                          // Row(
+                          //   children: [
+                          //     Expanded(child: Divider(color: Colors.white.withOpacity(0.2))),
+                          //     Padding(
+                          //       padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          //       child: Text(
+                          //         "or continue with",
+                          //         style: TextStyle(color: Colors.white.withOpacity(0.65), fontSize: 12),
+                          //       ),
+                          //     ),
+                          //     Expanded(child: Divider(color: Colors.white.withOpacity(0.2))),
+                          //   ],
+                          // ),
+                          // const SizedBox(height: 24),
+                          // GlassCard(
+                          //   borderRadius: 14,
+                          //   padding: EdgeInsets.zero,
+                          //   child: InkWell(
+                          //     onTap: () {},
+                          //     borderRadius: BorderRadius.circular(14),
+                          //     child: SizedBox(
+                          //       height: 52,
+                          //       width: double.infinity,
+                          //       child: Row(
+                          //         mainAxisAlignment: MainAxisAlignment.center,
+                          //         children: const [
+                          //           Icon(Icons.g_mobiledata, color: Colors.white, size: 36),
+                          //           SizedBox(width: 4),
+                          //           Text(
+                          //             "Continue with Google",
+                          //             style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
+                          //           ),
+                          //         ],
+                          //       ),
+                          //     ),
+                          //   ),
+                          // ),
                           const Spacer(flex: 2),
                         ],
                       ),

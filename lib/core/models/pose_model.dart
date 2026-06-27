@@ -68,8 +68,24 @@ class PoseModel {
         [];
 
     // Video URL nested under "video.full_url"
+    // The API may return a raw Cloudinary public ID (e.g. "yoga/mountain-pose")
+    // or an already-complete URL — handle both.
+    const String _cloudName = 'dqmgznfqx'; // ← your Cloudinary cloud name
+
     final videoMap = json['video'] as Map<String, dynamic>?;
-    final String? videoUrl = videoMap?['full_url'] as String?;
+    String? videoUrl;
+    if (videoMap != null) {
+      final rawUrl = videoMap['full_url'] as String?;
+      if (rawUrl != null && rawUrl.isNotEmpty) {
+        if (rawUrl.startsWith('http')) {
+          // Already a full URL — use as-is
+          videoUrl = rawUrl;
+        } else {
+          // Raw public ID — build the Cloudinary streaming URL
+          videoUrl = 'https://res.cloudinary.com/$_cloudName/video/upload/$rawUrl.mov';
+        }
+      }
+    }
 
     return PoseModel(
       id: id,

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:video_player/video_player.dart';
+import 'package:chewie/chewie.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/models/pose_model.dart';
 import '../../core/widgets/glass_card.dart';
@@ -21,6 +23,11 @@ class _PoseDetailScreenState extends State<PoseDetailScreen> {
   bool _isLoading = true;
   String? _error;
 
+  VideoPlayerController? _videoController;
+  ChewieController? _chewieController;
+  bool _videoInitialized = false;
+  bool _videoError = false;
+
   @override
   void initState() {
     super.initState();
@@ -40,6 +47,9 @@ class _PoseDetailScreenState extends State<PoseDetailScreen> {
           _pose = PoseModel.fromJson(rawData as Map<String, dynamic>);
           _isLoading = false;
         });
+        if (_pose!.videoUrl != null && _pose!.videoUrl!.isNotEmpty) {
+          _initVideo(_pose!.videoUrl!);
+        }
       } else {
         setState(() {
           _error = 'Pose not found.\nKeys in response: ${response.keys.join(', ')}';
@@ -52,6 +62,33 @@ class _PoseDetailScreenState extends State<PoseDetailScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _initVideo(String url) async {
+    try {
+      _videoController = VideoPlayerController.networkUrl(Uri.parse(url));
+      await _videoController!.initialize();
+      _chewieController = ChewieController(
+        videoPlayerController: _videoController!,
+        autoPlay: false,
+        looping: false,
+        aspectRatio: _videoController!.value.aspectRatio,
+        placeholder: Container(color: AppColors.kPrimary.withOpacity(0.05)),
+        errorBuilder: (context, errorMessage) => Center(
+          child: Text(errorMessage, style: const TextStyle(color: Colors.red)),
+        ),
+      );
+      if (mounted) setState(() => _videoInitialized = true);
+    } catch (e) {
+      if (mounted) setState(() => _videoError = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _chewieController?.dispose();
+    _videoController?.dispose();
+    super.dispose();
   }
 
   @override
@@ -191,39 +228,50 @@ class _PoseDetailScreenState extends State<PoseDetailScreen> {
                 fit: StackFit.expand,
                 children: [
                   Container(color: AppColors.kPrimary.withOpacity(0.05)),
-                  // Simulated Video Player background
-                  Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 70,
-                          height: 70,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 10,
-                                spreadRadius: 2,
-                              ),
-                            ],
+                  if (_videoInitialized && _chewieController != null)
+                    Chewie(controller: _chewieController!)
+                  else if (_videoError)
+                    Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.videocam_off, size: 40, color: Colors.red),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Video unavailable',
+                            style: GoogleFonts.poppins(
+                              color: AppColors.kNavy.withOpacity(0.7),
+                              fontSize: 12,
+                            ),
                           ),
-                          child: const Icon(Icons.play_arrow_rounded, size: 40, color: AppColors.kPrimary),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "Watch Instructional Video",
-                          style: GoogleFonts.poppins(
-                            color: AppColors.kNavy.withOpacity(0.7),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
+                        ],
+                      ),
+                    )
+                  else
+                    Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const SizedBox(
+                            width: 32,
+                            height: 32,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: AppColors.kPrimary,
+                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 10),
+                          Text(
+                            pose.videoUrl != null ? 'Loading video...' : 'No video available',
+                            style: GoogleFonts.poppins(
+                              color: AppColors.kNavy.withOpacity(0.7),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),

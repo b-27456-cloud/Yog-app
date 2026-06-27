@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/models/user_model.dart';
 import '../../core/network/api_client.dart';
+import '../../core/audio/music_service.dart';
 import 'auth_service.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -29,6 +30,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       _user = await _authService.getCurrentUser();
       notifyListeners();
+      MusicService.instance.start();
       return true;
     } on SessionExpiredException {
       await logout();
@@ -49,6 +51,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       _user = await _authService.login(email, password);
       _setLoading(false);
+      MusicService.instance.start();
       return true;
     } on ApiException catch (e) {
       _errorMessage = e.message;
@@ -98,6 +101,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    await MusicService.instance.stop();
     await _authService.logout();
     _user = null;
     notifyListeners();

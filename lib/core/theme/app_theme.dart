@@ -16,4 +16,18 @@ class AppTheme {
       ),
     );
   }
+
+  static ThemeData get lightTheme {
+    return ThemeData.light().copyWith(
+      scaffoldBackgroundColor: Colors.white,
+      primaryColor: AppColors.kPrimary,
+      textTheme: GoogleFonts.poppinsTextTheme(ThemeData.light().textTheme),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: IconThemeData(color: AppColors.kNavy),
+        titleTextStyle: TextStyle(color: AppColors.kNavy, fontSize: 20, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
 }

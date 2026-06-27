@@ -13,9 +13,13 @@ import 'features/profile/profile_screen.dart';
 import 'features/pose_detail/pose_detail_screen.dart';
 import 'features/session/session_screen.dart';
 import 'features/settings/settings_screen.dart';
+import 'features/achievements/achievements_screen.dart';
+import 'features/notifications/notifications_screen.dart';
 import 'features/auth/auth_provider.dart';
+import 'features/explore/pose_provider.dart';
 import 'core/theme/app_theme.dart';
-
+import 'core/providers/settings_provider.dart';
+import 'core/providers/theme_provider.dart';
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final GoRouter appRouter = GoRouter(
@@ -83,6 +87,16 @@ final GoRouter appRouter = GoRouter(
       path: '/settings',
       pageBuilder: (context, state) => _buildPageWithTransition(const SettingsScreen(), state),
     ),
+    GoRoute(
+      path: '/achievements',
+      pageBuilder: (context, state) =>
+          _buildPageWithTransition(const AchievementsScreen(), state),
+    ),
+    GoRoute(
+      path: '/notifications',
+      pageBuilder: (context, state) =>
+          _buildPageWithTransition(const NotificationsScreen(), state),
+    ),
   ],
 );
 
@@ -105,12 +119,21 @@ class App extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => PoseProvider()),
+        ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
-      child: MaterialApp.router(
-        title: 'YogaAI',
-        theme: AppTheme.darkTheme,
-        routerConfig: appRouter,
-        debugShowCheckedModeBanner: false,
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, _) {
+          return MaterialApp.router(
+            title: 'YogaAI',
+            theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: themeProvider.themeMode,
+            routerConfig: appRouter,
+            debugShowCheckedModeBanner: false,
+          );
+        },
       ),
     );
   }

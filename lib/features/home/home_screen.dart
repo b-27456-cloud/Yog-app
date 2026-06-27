@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../core/models/pose_model.dart';
@@ -10,6 +11,7 @@ import '../../core/widgets/pose_selection_sheet.dart';
 import '../../core/network/analytics_service.dart';
 import '../../core/models/analytics_models.dart';
 import '../auth/auth_provider.dart';
+import '../../core/widgets/session_history_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -25,6 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<SessionRecord> _recentSessions = [];
   bool _isLoadingStats = true;
   String? _errorMessage;
+  int _unreadCount = 0;
 
   @override
   void initState() {
@@ -66,6 +69,12 @@ class _HomeScreenState extends State<HomeScreen> {
           _isLoadingStats = false;
         });
       }
+      // Non-blocking: fetch notification unread count
+      _analyticsService.fetchNotifications().then((notifs) {
+        if (mounted) {
+          setState(() => _unreadCount = notifs.where((n) => !n.read).length);
+        }
+      }).catchError((_) {});
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -122,10 +131,45 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                     Row(
-                      children: const [
-                        Icon(Icons.notifications_outlined, color: AppColors.kNavy, size: 24),
-                        SizedBox(width: 12),
-                        CircleAvatar(
+                      children: [
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            GestureDetector(
+                              onTap: () => context.push('/notifications'),
+                              child: const Icon(
+                                Icons.notifications_outlined,
+                                color: AppColors.kNavy,
+                                size: 24,
+                              ),
+                            ),
+                            if (_unreadCount > 0)
+                              Positioned(
+                                top: -4,
+                                right: -4,
+                                child: Container(
+                                  width: 16,
+                                  height: 16,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      _unreadCount > 9 ? '9+' : '$_unreadCount',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(width: 12),
+                        const CircleAvatar(
                           radius: 20,
                           backgroundColor: AppColors.kPrimary,
                           child: Icon(Icons.person, color: Colors.white, size: 20),
@@ -356,27 +400,75 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 24),
 
                 // ─── SECTION 5: RECENT SESSIONS ───
-                Text(
-                  "Recent Sessions",
-                  style: GoogleFonts.poppins(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.kNavy,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "Recent Sessions",
+                      style: GoogleFonts.poppins(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.kNavy,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => SessionHistorySheet.show(context),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text(
+                        "View All",
+                        style: TextStyle(
+                          color: AppColors.kSkyBlue,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
-                if (_recentSessions.isNotEmpty)
+                if (_isLoadingStats)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16.0),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else if (_recentSessions.isEmpty)
+                  GlassCard(
+                    borderRadius: 14,
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: AppColors.kPrimary.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.history, color: AppColors.kSkyBlue, size: 24),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'No recent sessions yet.',
+                          style: TextStyle(
+                            color: AppColors.kNavy.withOpacity(0.65),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
                   ..._recentSessions.map((session) {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 10.0),
                       child: _buildRecentSessionTileFromRecord(session),
                     );
-                  }).toList()
-                else ...[
-                  _buildRecentSessionTileHardcoded("Sun Salutation", "Today", 12, 91),
-                  const SizedBox(height: 10),
-                  _buildRecentSessionTileHardcoded("Warrior II", "Yesterday", 8, 85),
-                ],
+                  }).toList(),
               ],
             ),
           ),
@@ -483,10 +575,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final poseName = session.pose.name.isNotEmpty ? session.pose.name : 'Yoga Session';
     final durationMin = (session.durationSeconds / 60).round();
     final dateStr = session.startTime != null ? _formatDate(session.startTime!) : 'Unknown date';
-    return _buildRecentSessionTileHardcoded(poseName, dateStr, durationMin, session.accuracyAverage);
-  }
+    final isDone = session.completed;
 
-  Widget _buildRecentSessionTileHardcoded(String poseName, String dateStr, int durationMin, int accuracy) {
     return GlassCard(
       borderRadius: 14,
       padding: const EdgeInsets.all(14),
@@ -515,7 +605,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 Text(
-                  "$dateStr • $durationMin min • $accuracy% accuracy",
+                  '$dateStr • $durationMin min • ${session.accuracyAverage}% accuracy',
                   style: TextStyle(
                     color: AppColors.kNavy.withOpacity(0.65),
                     fontSize: 12,
@@ -528,13 +618,13 @@ class _HomeScreenState extends State<HomeScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: AppColors.kSkyBlue.withOpacity(0.2),
+              color: isDone ? Colors.green.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Text(
-              "View",
+            child: Text(
+              isDone ? 'Done' : 'Partial',
               style: TextStyle(
-                color: AppColors.kSkyBlue,
+                color: isDone ? Colors.green.shade700 : Colors.orange.shade800,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),

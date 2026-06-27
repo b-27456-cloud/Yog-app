@@ -22,11 +22,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   UserStats? _userStats;
   UserStreak? _userStreak;
   List<String> _insights = [];
-  List<SessionRecord> _sessions = [];
-  SessionMeta? _sessionMeta;
   bool _isLoading = true;
   String? _errorMessage;
-  int _currentPage = 1;
 
   @override
   void initState() {
@@ -51,7 +48,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() {
         _isLoading = true;
         _errorMessage = null;
-        _currentPage = 1;
       });
     }
 
@@ -60,16 +56,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _analyticsService.fetchUserStats(userId),
         _analyticsService.fetchUserStreak(userId),
         _analyticsService.fetchUserInsights(userId),
-        _analyticsService.fetchUserSessions(userId, page: _currentPage),
       ]);
       if (mounted) {
         setState(() {
           _userStats = results[0] as UserStats;
           _userStreak = results[1] as UserStreak;
           _insights = results[2] as List<String>;
-          final sessionRes = results[3] as SessionResponse;
-          _sessions = sessionRes.sessions;
-          _sessionMeta = sessionRes.meta;
           _isLoading = false;
         });
       }
@@ -83,28 +75,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _loadMoreSessions() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final userId = authProvider.user?.id;
-    if (userId == null) return;
-    if (_sessionMeta == null) return;
-
-    final nextPage = _currentPage + 1;
-    if (nextPage > _sessionMeta!.pages) return;
-
-    try {
-      final res = await _analyticsService.fetchUserSessions(userId, page: nextPage);
-      if (mounted) {
-        setState(() {
-          _sessions.addAll(res.sessions);
-          _sessionMeta = res.meta;
-          _currentPage = nextPage;
-        });
-      }
-    } catch (_) {
-      // Ignore pagination errors to keep existing items visible
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -395,117 +365,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(height: 14),
                     ],
 
-                    // ─── SESSION HISTORY ───
-                    if (!_isLoading) ...[
-                      Text(
-                        "Session History",
-                        style: GoogleFonts.poppins(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.kNavy,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (_sessions.isEmpty)
-                        GlassCard(
-                          borderRadius: 14,
-                          padding: const EdgeInsets.all(16),
-                          child: Text(
-                            "No sessions recorded yet.",
-                            style: TextStyle(
-                              color: AppColors.kNavy.withOpacity(0.65),
-                              fontSize: 13,
-                            ),
-                          ),
-                        )
-                      else ...[
-                        ..._sessions.map((session) {
-                          final durationMin = (session.durationSeconds / 60).round();
-                          final dateStr = session.startTime != null ? _formatDate(session.startTime!) : 'Unknown date';
-                          final isDone = session.completed;
-                          final poseName = session.pose.name.isNotEmpty ? session.pose.name : 'Yoga Session';
-                          
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 10.0),
-                            child: GlassCard(
-                              borderRadius: 14,
-                              padding: const EdgeInsets.all(14),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 46,
-                                    height: 46,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.kPrimary.withOpacity(0.25),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: const Icon(Icons.history, color: AppColors.kSkyBlue, size: 24),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          poseName,
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                            color: AppColors.kNavy,
-                                          ),
-                                        ),
-                                        Text(
-                                          "$dateStr • $durationMin min • ${session.accuracyAverage}% accuracy",
-                                          style: TextStyle(
-                                            color: AppColors.kNavy.withOpacity(0.65),
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: isDone ? Colors.green.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      isDone ? "Done" : "Partial",
-                                      style: TextStyle(
-                                        color: isDone ? Colors.green.shade700 : Colors.orange.shade800,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                        if (_sessionMeta != null && _currentPage < _sessionMeta!.pages)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8.0),
-                            child: TextButton(
-                              onPressed: _loadMoreSessions,
-                              style: TextButton.styleFrom(
-                                backgroundColor: AppColors.kPrimary.withOpacity(0.1),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                              child: Text(
-                                "Load More",
-                                style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.kPrimary,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                      const SizedBox(height: 24),
-                    ],
+
 
                     // ─── MENU ───
                     GlassCard(
@@ -517,9 +377,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           children: [
                             _buildMenuItem(Icons.favorite_border, 'Saved Poses', () {}),
                             _buildDivider(),
-                            _buildMenuItem(Icons.emoji_events_outlined, 'Achievements', () {}),
+                            _buildMenuItem(Icons.emoji_events_outlined, 'Achievements', () {
+                              context.push('/achievements');
+                            }),
                             _buildDivider(),
-                            _buildMenuItem(Icons.notifications_outlined, 'Notifications', () {}),
+                            _buildMenuItem(Icons.notifications_outlined, 'Notifications', () {
+                              context.push('/notifications');
+                            }),
                             _buildDivider(),
                             _buildMenuItem(Icons.settings_outlined, 'Settings', () {
                               context.push('/settings');
