@@ -26,7 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
   UserStats? _userStats;
   UserStreak? _userStreak;
   List<SessionRecord> _recentSessions = [];
-  List<PoseModel> _recommendedPoses = [];
+  List<PoseModel> _todaysPoses = [];
   bool _isLoadingStats = true;
   String? _errorMessage;
   int _unreadCount = 0;
@@ -62,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _analyticsService.fetchUserStats(userId),
         _analyticsService.fetchUserStreak(userId),
         _analyticsService.fetchUserSessions(userId, page: 1, limit: 3),
-        PoseService().getPoses(limit: 20, page: 1),
+        PoseService().getPoses(limit: 3, page: 1),
       ]);
       if (mounted) {
         setState(() {
@@ -73,13 +73,9 @@ class _HomeScreenState extends State<HomeScreen> {
           final posesResponse = results[3] as Map<String, dynamic>;
           final List<dynamic>? posesList = posesResponse['data']?['poses'];
           if (posesList != null && posesList.isNotEmpty) {
-            final allPoses = posesList.map((p) => PoseModel.fromJson(p as Map<String, dynamic>)).toList();
-            allPoses.shuffle();
-            _recommendedPoses = allPoses.take(3).toList();
+            _todaysPoses = posesList.map((p) => PoseModel.fromJson(p as Map<String, dynamic>)).toList();
           } else {
-            final fallback = List<PoseModel>.from(posesData);
-            fallback.shuffle();
-            _recommendedPoses = fallback.take(3).toList();
+            _todaysPoses = posesData.take(3).toList();
           }
           
           _isLoadingStats = false;
@@ -98,6 +94,17 @@ class _HomeScreenState extends State<HomeScreen> {
           _errorMessage = e.toString();
         });
       }
+    }
+  }
+
+  String get _greetingMessage {
+    final hour = DateTime.now().hour;
+    if (hour < 12) {
+      return "Good Morning 🌿";
+    } else if (hour < 17) {
+      return "Good Afternoon 🌿";
+    } else {
+      return "Good Evening 🌿";
     }
   }
 
@@ -129,7 +136,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          "Good Morning 🌿",
+                          _greetingMessage,
                           style: GoogleFonts.poppins(
                             fontSize: 13,
                             fontWeight: FontWeight.normal,
@@ -146,6 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ],
                     ),
+                    /*
                     Row(
                       children: [
                         Stack(
@@ -192,6 +200,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ],
                     ),
+                    */
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -299,12 +308,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 24),
                 ],
 
-                // ─── SECTION 3: RECOMMENDATION SESSIONS ───
+                // ─── SECTION 3: TODAY'S SESSION ───
+                /*
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      "Recommendation Sessions",
+                      "Today's Session",
                       style: GoogleFonts.poppins(
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
@@ -312,7 +322,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     TextButton(
-                      onPressed: () => context.go('/explore'),
+                      onPressed: () {},
                       style: TextButton.styleFrom(
                         padding: EdgeInsets.zero,
                         minimumSize: Size.zero,
@@ -335,8 +345,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     scrollDirection: Axis.horizontal,
                     clipBehavior: Clip.none,
                     children: [
-                      if (_recommendedPoses.isNotEmpty)
-                        ..._recommendedPoses.map((pose) {
+                      if (_todaysPoses.isNotEmpty)
+                        ..._todaysPoses.take(3).map((pose) {
                           return Padding(
                             padding: const EdgeInsets.only(right: 12.0),
                             child: _buildPoseCard(context, pose),
@@ -353,6 +363,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
+                */
 
                 // ─── SECTION 4: START DETECTION ───
                 GlassCard(
@@ -536,7 +547,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildPoseCard(BuildContext context, PoseModel pose) {
     return GestureDetector(
-      onTap: () => context.push('/camera', extra: {'poseId': pose.id}),
+      onTap: () => context.push('/pose/${pose.id}'),
       child: SizedBox(
         width: 145,
         child: GlassCard(
@@ -670,3 +681,4 @@ class _HomeScreenState extends State<HomeScreen> {
     return "${months[date.month - 1]} ${date.day}";
   }
 }
+

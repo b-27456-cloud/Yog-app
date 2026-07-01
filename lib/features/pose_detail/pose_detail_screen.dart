@@ -5,8 +5,12 @@ import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/models/pose_model.dart';
+import '../../core/network/api_client.dart';
 import '../../core/widgets/glass_card.dart';
+import '../../core/widgets/pose_locked_sheet.dart';
 import '../explore/pose_service.dart';
+import 'package:provider/provider.dart';
+import '../auth/auth_provider.dart';
 
 class PoseDetailScreen extends StatefulWidget {
   final String poseId;
@@ -65,6 +69,13 @@ class _PoseDetailScreenState extends State<PoseDetailScreen> {
         });
       }
     } catch (e) {
+      if (e is PoseLockedException) {
+        if (mounted) {
+          context.pop();
+          showPoseLockedSheet(context, lockedError: e);
+        }
+        return;
+      }
       setState(() {
         _error = e.toString();
         _isLoading = false;
@@ -177,6 +188,11 @@ class _PoseDetailScreenState extends State<PoseDetailScreen> {
     }
 
     final pose = _pose!;
+    final authProvider = context.read<AuthProvider>();
+    final userProfile = authProvider.user?.accessibilityProfile ?? 'standard';
+    final hasModification = (userProfile == 'elderly' || userProfile == 'injury_prone') &&
+        pose.modifications.containsKey(userProfile);
+    final modificationData = hasModification ? pose.modifications[userProfile] : null;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -375,6 +391,55 @@ class _PoseDetailScreenState extends State<PoseDetailScreen> {
                           ),
                         );
                       }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+
+                // ── Modified Instruction ──
+                if (hasModification && modificationData != null) ...[
+                  Row(
+                    children: [
+                      const Icon(Icons.accessibility_new, color: AppColors.kPrimary, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        "Modified Instruction",
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.kPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  GlassCard(
+                    borderRadius: 14,
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          modificationData['description']?.toString() ?? '',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.kNavy.withOpacity(0.8),
+                            height: 1.5,
+                          ),
+                        ),
+                        if (modificationData['imageUrl'] != null && modificationData['imageUrl'].toString().isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.network(
+                              modificationData['imageUrl'].toString(),
+                              height: 120,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   const SizedBox(height: 20),

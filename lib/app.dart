@@ -20,6 +20,8 @@ import 'features/explore/pose_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/providers/settings_provider.dart';
 import 'core/providers/theme_provider.dart';
+import 'core/audio/music_service.dart';
+
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final GoRouter appRouter = GoRouter(
@@ -48,7 +50,10 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/explore',
-      pageBuilder: (context, state) => _buildPageWithTransition(const ExploreScreen(), state),
+      pageBuilder: (context, state) {
+        final difficulty = state.uri.queryParameters['difficulty'];
+        return _buildPageWithTransition(ExploreScreen(initialDifficulty: difficulty), state);
+      },
     ),
     GoRoute(
       path: '/camera',
@@ -111,8 +116,57 @@ CustomTransitionPage _buildPageWithTransition(Widget child, GoRouterState state)
   );
 }
 
-class App extends StatelessWidget {
+class App extends StatefulWidget {
   const App({Key? key}) : super(key: key);
+
+  @override
+  State<App> createState() => _AppState();
+}
+
+class _AppState extends State<App> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) {
+      MusicService.instance.stop();
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      MusicService.instance.pause();
+    } else if (state == AppLifecycleState.resumed) {
+      MusicService.instance.resume();
+    }
+  }
+
+  Future<bool> _showExitDialog(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Exit App'),
+        content: const Text('Are you sure you want to close the app?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Exit'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -125,13 +179,16 @@ class App extends StatelessWidget {
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
-          return MaterialApp.router(
-            title: 'YogaAI',
-            theme: AppTheme.lightTheme,
-            darkTheme: AppTheme.darkTheme,
-            themeMode: themeProvider.themeMode,
-            routerConfig: appRouter,
-            debugShowCheckedModeBanner: false,
+          return WillPopScope(
+            onWillPop: () => _showExitDialog(context),
+            child: MaterialApp.router(
+              title: 'YogaAI',
+              theme: AppTheme.lightTheme,
+              darkTheme: AppTheme.darkTheme,
+              themeMode: themeProvider.themeMode,
+              routerConfig: appRouter,
+              debugShowCheckedModeBanner: false,
+            ),
           );
         },
       ),

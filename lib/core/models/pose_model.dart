@@ -14,6 +14,7 @@ class PoseModel {
   final String? videoUrl;
   final List<String> targetAreas;
   final List<String> contraindications;
+  final Map<String, dynamic> modifications;
   final IconData icon;
 
   const PoseModel({
@@ -28,6 +29,7 @@ class PoseModel {
     required this.steps,
     required this.targetAreas,
     required this.contraindications,
+    required this.modifications,
     this.imageUrl,
     this.videoUrl,
     required this.icon,
@@ -99,6 +101,7 @@ class PoseModel {
       steps: steps,
       targetAreas: List<String>.from(json['target_areas'] ?? []),
       contraindications: List<String>.from(json['contraindications'] ?? []),
+      modifications: (json['modifications'] as Map<String, dynamic>?) ?? {},
       imageUrl: json['image_url'] as String?,
       videoUrl: videoUrl,
       icon: _iconForDifficulty((json['difficulty'] ?? '').toString()),

@@ -12,6 +12,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/glass_card.dart';
+import '../../core/widgets/pose_locked_sheet.dart';
 import '../../core/audio/music_service.dart';
 import '../session/session_service.dart';
 import '../../core/network/api_client.dart';
@@ -127,6 +128,11 @@ class _CameraScreenState extends State<CameraScreen> {
       }
     } on SessionExpiredException {
       if (mounted) setState(() => _sessionError = 'Session expired. Please log in again.');
+    } on PoseLockedException catch (e) {
+      if (mounted) {
+        context.pop();
+        showPoseLockedSheet(context, lockedError: e);
+      }
     } on ApiException catch (e) {
       if (mounted) setState(() => _sessionError = e.message);
     } catch (e) {
@@ -290,6 +296,13 @@ class _CameraScreenState extends State<CameraScreen> {
           }
         });
         _updateBeepState(_accuracy);
+      }
+    } on PoseLockedException {
+      if (mounted) {
+        context.pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This pose is locked. Please complete your beginner poses first.')),
+        );
       }
     } catch (e, st) {
       debugPrint('[sendLogFrame] Error sending frame: $e');

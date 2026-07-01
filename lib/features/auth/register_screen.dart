@@ -26,6 +26,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _agreedToTerms = false;
+  String _selectedProfile = 'standard';
 
   @override
   void dispose() {
@@ -135,6 +136,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         cursorColor: AppColors.kSkyBlue,
                         keyboardType: TextInputType.number,
                         decoration: _buildInputDecoration("Age", Icons.cake_outlined),
+                      ),
+                      const SizedBox(height: 16),
+                      // Capability Selection
+                      DropdownButtonFormField<String>(
+                        value: _selectedProfile,
+                        dropdownColor: AppColors.kNavy,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: _buildInputDecoration("Physical Capability", Icons.accessibility_new),
+                        items: const [
+                          DropdownMenuItem(value: 'standard', child: Text('Standard')),
+                          DropdownMenuItem(value: 'elderly', child: Text('Elderly (65+)')),
+                          DropdownMenuItem(value: 'injury_prone', child: Text('Injury-Prone')),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() {
+                              _selectedProfile = value;
+                            });
+                          }
+                        },
                       ),
                       const SizedBox(height: 16),
                       // Password Field
@@ -247,7 +268,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                           lastName: _lastNameController.text.trim(),
                                           phone: _phoneController.text.trim(),
                                           age: int.tryParse(_ageController.text.trim()) ?? 0,
-                                          accessibilityProfile: 'standard', // default value
+                                          accessibilityProfile: _selectedProfile,
                                         );
                                         
                                         if (success && mounted) {

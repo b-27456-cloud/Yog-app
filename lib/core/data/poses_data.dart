@@ -13,6 +13,7 @@ final List<PoseModel> posesData = [
     icon: Icons.accessibility_new,
     targetAreas: ['legs', 'hips', 'chest'],
     contraindications: ['Recent knee injury'],
+    modifications: const {},
     benefits: [
       'Strengthens legs, glutes, and core',
       'Improves hip flexibility and opening',
@@ -37,6 +38,7 @@ final List<PoseModel> posesData = [
     icon: Icons.park_outlined,
     targetAreas: ['legs', 'core', 'ankles'],
     contraindications: ['Low blood pressure'],
+    modifications: const {},
     benefits: [
       'Improves balance and coordination',
       'Strengthens ankles, calves, and thighs',
@@ -61,6 +63,7 @@ final List<PoseModel> posesData = [
     icon: Icons.pets,
     targetAreas: ['hamstrings', 'calves', 'shoulders'],
     contraindications: ['Carpal tunnel syndrome'],
+    modifications: const {},
     benefits: [
       'Stretches hamstrings',
       'Strengthens shoulders',
@@ -84,6 +87,7 @@ final List<PoseModel> posesData = [
     icon: Icons.terrain,
     targetAreas: ['whole body', 'core'],
     contraindications: [],
+    modifications: const {},
     benefits: [
       'Improves posture',
       'Strengthens thighs',
@@ -107,6 +111,7 @@ final List<PoseModel> posesData = [
     icon: Icons.monitor_heart_outlined,
     targetAreas: ['back', 'chest', 'shoulders'],
     contraindications: ['Back injury'],
+    modifications: const {},
     benefits: [
       'Strengthens spine',
       'Stretches chest',
@@ -130,6 +135,7 @@ final List<PoseModel> posesData = [
     icon: Icons.child_care,
     targetAreas: ['back', 'hips', 'thighs'],
     contraindications: ['Knee injury'],
+    modifications: const {},
     benefits: [
       'Stretches hips',
       'Calms the mind',
@@ -153,6 +159,7 @@ final List<PoseModel> posesData = [
     icon: Icons.chair_alt_outlined,
     targetAreas: ['thighs', 'chest'],
     contraindications: [],
+    modifications: const {},
     benefits: [
       'Strengthens thighs',
       'Opens chest',
@@ -176,6 +183,7 @@ final List<PoseModel> posesData = [
     icon: Icons.flight_takeoff,
     targetAreas: ['hips', 'lower back'],
     contraindications: ['Knee injury'],
+    modifications: const {},
     benefits: [
       'Opens hips',
       'Relieves lower back tension',

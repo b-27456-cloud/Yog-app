@@ -22,6 +22,9 @@ class _SessionScreenState extends State<SessionScreen>
   @override
   void initState() {
     super.initState();
+    // NOTE: Music should NOT automatically stop when a pose is activated
+    // _isPlaying only controls UI state (play/pause button icon), not actual music.
+    // Music is only controlled by: Settings > Sound Effects toggle, or app lifecycle.
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),

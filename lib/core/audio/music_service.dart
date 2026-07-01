@@ -9,6 +9,10 @@ class MusicService {
 
   final AudioPlayer _player = AudioPlayer();
   bool _running = false;
+  bool _isEnabled = true;
+
+  bool get isEnabled => _isEnabled;
+  bool get isRunning => _running;
 
   Future<void> start() async {
     if (_running) return;
@@ -33,7 +37,7 @@ class MusicService {
       );
 
       await _player.setReleaseMode(ReleaseMode.loop);
-      await _player.setVolume(0.35); // low enough for beep to cut through
+      await _player.setVolume(_isEnabled ? 0.35 : 0.0); // low enough for beep to cut through
       await _player.play(AssetSource('audio/background_music.mp3'));
     } catch (e) {
       debugPrint('[MusicService] Failed to start background music: $e');
@@ -50,6 +54,16 @@ class MusicService {
 
   Future<void> resume() async {
     if (_running) await _player.resume();
+  }
+
+  /// Enables or disables background music by adjusting volume.
+  /// When disabled, music is silenced (volume 0) but not stopped.
+  Future<void> setMusicEnabled(bool enabled) async {
+    _isEnabled = enabled;
+    if (_running) {
+      await _player.setVolume(enabled ? 0.35 : 0.0);
+    }
+    debugPrint('[MusicService] Music ${enabled ? 'enabled' : 'disabled'}');
   }
 
   void dispose() {

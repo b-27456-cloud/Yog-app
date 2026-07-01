@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../audio/music_service.dart';
 
 class SettingsProvider extends ChangeNotifier {
   SharedPreferences? _prefs;
@@ -33,6 +34,7 @@ class SettingsProvider extends ChangeNotifier {
   Future<void> setSoundEffects(bool value) async {
     _soundEffects = value;
     await _prefs?.setBool('soundEffects', value);
+    await MusicService.instance.setMusicEnabled(value);
     notifyListeners();
   }
 

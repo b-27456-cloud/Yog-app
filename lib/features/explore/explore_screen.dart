@@ -9,7 +9,8 @@ import '../../core/widgets/glass_card.dart';
 import 'pose_provider.dart';
 
 class ExploreScreen extends StatefulWidget {
-  const ExploreScreen({Key? key}) : super(key: key);
+  final String? initialDifficulty;
+  const ExploreScreen({Key? key, this.initialDifficulty}) : super(key: key);
 
   @override
   State<ExploreScreen> createState() => _ExploreScreenState();
@@ -27,10 +28,24 @@ class _ExploreScreenState extends State<ExploreScreen> {
   void initState() {
     super.initState();
     _searchController = TextEditingController();
-    
+
+    // Pre-seed difficulty filter if navigated with one (e.g. from lock sheet CTA)
+    if (widget.initialDifficulty != null) {
+      final seed = widget.initialDifficulty![0].toUpperCase() +
+          widget.initialDifficulty!.substring(1).toLowerCase();
+      if (_difficulties.contains(seed)) {
+        _selectedDifficulty = seed;
+      }
+    }
+
     // Initialize poses on first load
     Future.microtask(() {
-      Provider.of<PoseProvider>(context, listen: false).initializePoses();
+      final provider = Provider.of<PoseProvider>(context, listen: false);
+      provider.initializePoses().then((_) {
+        if (mounted && _selectedDifficulty != 'All') {
+          provider.applyFilters(difficulty: _selectedDifficulty);
+        }
+      });
     });
   }
 
@@ -446,6 +461,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   // ─── POSE CARD ───
   Widget _buildPoseCard(BuildContext context, PoseModel pose, int index) {
+    final bool isLocked = pose.difficulty.toLowerCase() != 'beginner';
+
     return GestureDetector(
       onTap: () => context.push('/pose-detail/${pose.id}'),
       child: Container(
@@ -461,78 +478,109 @@ class _ExploreScreenState extends State<ExploreScreen> {
           ],
         ),
         clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
           children: [
-            // Image Section
-            Expanded(
-              flex: 3,
-              child: Container(
-                width: double.infinity,
-                color: AppColors.kInputBg ?? AppColors.kNavy.withOpacity(0.05),
-                child: pose.imageUrl != null && pose.imageUrl!.isNotEmpty
-                    ? Image.network(
-                        pose.imageUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Center(
-                          child: Icon(pose.icon, color: AppColors.kNavy.withOpacity(0.2), size: 40),
-                        ),
-                      )
-                    : Center(
-                        child: Icon(pose.icon, color: AppColors.kNavy.withOpacity(0.2), size: 40),
-                      ),
-              ),
-            ),
-            // Details Section
-            Expanded(
-              flex: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      pose.name,
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.kNavy,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Row(
+            // ── Card content ──
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Image Section
+                Expanded(
+                  flex: 3,
+                  child: Container(
+                    width: double.infinity,
+                    color: AppColors.kInputBg ?? AppColors.kNavy.withOpacity(0.05),
+                    child: pose.imageUrl != null && pose.imageUrl!.isNotEmpty
+                        ? Image.network(
+                            pose.imageUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Center(
+                              child: Icon(pose.icon, color: AppColors.kNavy.withOpacity(0.2), size: 40),
+                            ),
+                          )
+                        : Center(
+                            child: Icon(pose.icon, color: AppColors.kNavy.withOpacity(0.2), size: 40),
+                          ),
+                  ),
+                ),
+                // Details Section
+                Expanded(
+                  flex: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          pose.difficulty,
+                          pose.name,
                           style: GoogleFonts.poppins(
-                            color: AppColors.kSkyBlue,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.kNavy,
                           ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Icon(Icons.timer_outlined, size: 12, color: AppColors.kNavy.withOpacity(0.4)),
-                            const SizedBox(width: 4),
                             Text(
-                              "${pose.durationMinutes}m",
+                              pose.difficulty,
                               style: GoogleFonts.poppins(
-                                color: AppColors.kNavy.withOpacity(0.5),
+                                color: AppColors.kSkyBlue,
                                 fontSize: 11,
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.w600,
                               ),
+                            ),
+                            Row(
+                              children: [
+                                Icon(Icons.timer_outlined, size: 12, color: AppColors.kNavy.withOpacity(0.4)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${pose.durationMinutes}m',
+                                  style: GoogleFonts.poppins(
+                                    color: AppColors.kNavy.withOpacity(0.5),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ],
                     ),
-                  ],
+                  ),
+                ),
+              ],
+            ),
+
+            // ── Lock badge overlay (non-beginner poses) ──
+            if (isLocked)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.55),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.25),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.lock_rounded,
+                    color: Color(0xFFFFD700),
+                    size: 14,
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),

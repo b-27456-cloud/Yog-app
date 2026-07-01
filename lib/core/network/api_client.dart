@@ -70,6 +70,13 @@ class ApiClient {
       return null;
     } else if (response.statusCode == 401) {
       throw SessionExpiredException('Your session has expired. Please log in again.');
+    } else if (response.statusCode == 403) {
+      String message = 'Access denied.';
+      try {
+        final errorBody = jsonDecode(response.body);
+        message = errorBody['message'] ?? errorBody['error'] ?? message;
+      } catch (_) {}
+      throw PoseLockedException(message);
     } else {
       String message = 'An error occurred';
       try {
@@ -102,4 +109,22 @@ class SessionExpiredException extends ApiException {
 
 class ValidationException extends ApiException {
   ValidationException(String message) : super(message);
+}
+
+/// Thrown when the backend returns HTTP 403 — the pose is gated behind
+/// completing all beginner poses. The [message] contains the full API
+/// message string, e.g.:
+///   "You must complete all beginner poses before accessing intermediate
+///    poses. Remaining beginner poses: Mountain Pose, Child's Pose."
+class PoseLockedException extends ApiException {
+  PoseLockedException(String message) : super(message);
+
+  /// Parses the remaining beginner pose names out of the API message.
+  List<String> get remainingPoses {
+    const marker = 'Remaining beginner poses: ';
+    final idx = message.indexOf(marker);
+    if (idx == -1) return [];
+    final raw = message.substring(idx + marker.length).replaceAll(RegExp(r'\.$'), '');
+    return raw.split(', ').where((s) => s.isNotEmpty).toList();
+  }
 }

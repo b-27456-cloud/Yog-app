@@ -123,20 +123,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           backgroundColor: AppColors.kLightBlue,
                           child: Icon(Icons.person, color: AppColors.kNavy, size: 52),
                         ),
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: Container(
-                            width: 28,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              color: AppColors.kPrimary,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: AppColors.kSteelBlue, width: 2),
-                            ),
-                            child: const Icon(Icons.camera_alt, color: Colors.white, size: 14),
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -375,8 +361,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         borderRadius: BorderRadius.circular(18),
                         child: Column(
                           children: [
-                            _buildMenuItem(Icons.favorite_border, 'Saved Poses', () {}),
-                            _buildDivider(),
                             _buildMenuItem(Icons.emoji_events_outlined, 'Achievements', () {
                               context.push('/achievements');
                             }),
@@ -388,8 +372,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             _buildMenuItem(Icons.settings_outlined, 'Settings', () {
                               context.push('/settings');
                             }),
-                            _buildDivider(),
-                            _buildMenuItem(Icons.help_outline, 'Help & Support', () {}),
                           ],
                         ),
                       ),

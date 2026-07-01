@@ -9,7 +9,6 @@ import '../../core/models/analytics_models.dart';
 import '../../core/network/analytics_service.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/theme_provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../auth/auth_provider.dart';
 import 'settings_service.dart';
 
@@ -27,13 +26,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Preferences state
   bool _pushNotifications = true;
   bool _hapticFeedback = false;
+  String? _localProfile;
 
   // Analytics state
   List<String> _insights = [];
-  List<SessionRecord> _sessions = [];
-  SessionMeta? _sessionMeta;
   bool _isLoadingInsights = true;
+
+  // ignore: unused_field
+  List<SessionRecord> _sessions = [];
+  // ignore: unused_field
+  SessionMeta? _sessionMeta;
+  // ignore: unused_field
   bool _isLoadingSessions = true;
+  // ignore: unused_field
   int _currentPage = 1;
 
   @override
@@ -48,7 +53,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (userId == null) {
       setState(() {
         _isLoadingInsights = false;
-        _isLoadingSessions = false;
       });
       return;
     }
@@ -59,39 +63,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }).catchError((_) {
       if (mounted) setState(() => _isLoadingInsights = false);
     });
-
-    // Fetch sessions
-    _analyticsService.fetchUserSessions(userId, page: _currentPage).then((res) {
-      if (mounted) {
-        setState(() {
-          _sessions = res.sessions;
-          _sessionMeta = res.meta;
-          _isLoadingSessions = false;
-        });
-      }
-    }).catchError((_) {
-      if (mounted) setState(() => _isLoadingSessions = false);
-    });
-  }
-
-  Future<void> _loadMoreSessions() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final userId = authProvider.user?.id;
-    if (userId == null) return;
-    final nextPage = _currentPage + 1;
-    final total = _sessionMeta?.pages ?? 1;
-    if (nextPage > total) return;
-
-    try {
-      final res = await _analyticsService.fetchUserSessions(userId, page: nextPage);
-      if (mounted) {
-        setState(() {
-          _sessions.addAll(res.sessions);
-          _sessionMeta = res.meta;
-          _currentPage = nextPage;
-        });
-      }
-    } catch (_) {}
   }
 
   Future<void> _updateSettingOptimistically({
@@ -119,6 +90,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
         setState(() {
           if (pushNotifications != null) _pushNotifications = !pushNotifications;
           if (hapticFeedback != null) _hapticFeedback = !hapticFeedback;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    }
+  }
+
+  Future<void> _updateProfile(String? value) async {
+    if (value == null) return;
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userId = authProvider.user?.id;
+    if (userId == null) return;
+
+    final oldProfile = _localProfile ?? authProvider.user?.accessibilityProfile ?? 'standard';
+    setState(() {
+      _localProfile = value;
+    });
+
+    final newSettings = SettingsModel(
+      accessibility: AccessibilitySettings(profile: value),
+    );
+
+    try {
+      await _settingsService.updateSettings(userId, newSettings);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _localProfile = oldProfile;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.toString())),
@@ -156,9 +156,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // ─── SECTION: AI Insights ───
-            _buildSectionHeader("AI Insights ✨"),
+            _buildSectionHeader("AI Insights ✨", subtitle: "Personalized tips from your sessions"),
             _buildInsightsSection(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
 
             // // ─── SECTION: Session History ───
             // _buildSectionHeader("Session History"),
@@ -166,7 +166,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // const SizedBox(height: 20),
 
             // ─── SECTION: Account ───
-            _buildSectionHeader("Account"),
+            _buildSectionHeader("Account", subtitle: "Your profile and session"),
             GlassCard(
               borderRadius: 18,
               padding: EdgeInsets.zero,
@@ -204,153 +204,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               color: AppColors.kNavy.withOpacity(0.65),
                             ),
                           ),
-                          trailing: Icon(Icons.chevron_right, color: AppColors.kNavy.withOpacity(0.65)),
-                          onTap: () {},
                         );
                       },
-                    ),
-                    _buildDivider(),
-                    _buildNavTile(Icons.lock_outline, "Change Password", null, _showChangePasswordDialog),
-                    _buildDivider(),
-                    _buildNavTile(Icons.language, "Language", settingsProvider.language, _showLanguageBottomSheet),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // ─── SECTION: Preferences ───
-            _buildSectionHeader("Preferences"),
-            GlassCard(
-              borderRadius: 18,
-              padding: EdgeInsets.zero,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: Column(
-                  children: [
-                    _buildSwitchTile(
-                      Icons.notifications_outlined,
-                      "Push Notifications",
-                      _pushNotifications,
-                      (v) => _updateSettingOptimistically(pushNotifications: v),
-                    ),
-                    _buildDivider(),
-                    _buildSwitchTile(
-                      Icons.volume_up_outlined,
-                      "Sound Effects",
-                      settingsProvider.soundEffects,
-                      (v) => settingsProvider.setSoundEffects(v),
-                    ),
-                    _buildDivider(),
-                    _buildSwitchTile(
-                      Icons.vibration,
-                      "Haptic Feedback",
-                      _hapticFeedback,
-                      (v) => _updateSettingOptimistically(hapticFeedback: v),
-                    ),
-                    _buildDivider(),
-                    ListTile(
-                      leading: _buildLeadingIcon(Icons.dark_mode_outlined),
-                      title: Text(
-                        "Dark Mode",
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.kNavy,
-                        ),
-                      ),
-                      trailing: Switch(
-                        value: themeProvider.isDarkMode,
-                        onChanged: (v) => themeProvider.toggleTheme(v),
-                        activeColor: AppColors.kPrimary,
-                        activeTrackColor: AppColors.kPrimary.withOpacity(0.4),
-                        inactiveThumbColor: AppColors.kNavy.withOpacity(0.3),
-                        inactiveTrackColor: AppColors.kNavy.withOpacity(0.1),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // ─── SECTION: Detection ───
-            _buildSectionHeader("Detection"),
-            GlassCard(
-              borderRadius: 18,
-              padding: EdgeInsets.zero,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: Column(
-                  children: [
-                    _buildNavTile(Icons.camera_alt_outlined, "Camera Quality", settingsProvider.cameraQuality, _showCameraQualityBottomSheet),
-                    _buildDivider(),
-                    _buildSwitchTile(
-                      Icons.flip,
-                      "Mirror Mode",
-                      settingsProvider.mirrorMode,
-                      (v) => settingsProvider.setMirrorMode(v),
-                    ),
-                    _buildDivider(),
-                    _buildNavTile(Icons.speed_outlined, "Detection Speed", settingsProvider.detectionSpeed, _showDetectionSpeedBottomSheet),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // ─── SECTION: About ───
-            _buildSectionHeader("About"),
-            GlassCard(
-              borderRadius: 18,
-              padding: EdgeInsets.zero,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: _buildLeadingIcon(Icons.info_outline),
-                      title: Text(
-                        "Version",
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.kNavy,
-                        ),
-                      ),
-                      trailing: Text(
-                        "1.0.0",
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.kNavy.withOpacity(0.65),
-                        ),
-                      ),
-                    ),
-                    _buildDivider(),
-                    _buildNavTile(Icons.privacy_tip_outlined, "Privacy Policy", null, () => _launchURL('https://example.com/privacy')),
-                    _buildDivider(),
-                    _buildNavTile(Icons.description_outlined, "Terms of Service", null, () => _launchURL('https://example.com/terms')),
-                    _buildDivider(),
-                    ListTile(
-                      leading: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: AppColors.kPrimary.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(Icons.star_outline, color: AppColors.kSkyBlue, size: 20),
-                      ),
-                      title: Text(
-                        "Rate App",
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.kNavy,
-                        ),
-                      ),
-                      trailing: Icon(Icons.chevron_right, color: AppColors.kNavy.withOpacity(0.50), size: 20),
-                      onTap: () => _launchURL('https://example.com/rate'),
                     ),
                     _buildDivider(),
                     ListTile(
@@ -380,6 +235,110 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                   ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // ─── SECTION: Accessibility ───
+            _buildSectionHeader("Accessibility", subtitle: "Physical capability profile"),
+            GlassCard(
+              borderRadius: 18,
+              padding: EdgeInsets.zero,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Consumer<AuthProvider>(
+                  builder: (context, authProvider, child) {
+                    final profile = _localProfile ?? authProvider.user?.accessibilityProfile ?? 'standard';
+                    return Column(
+                      children: [
+                        _buildRadioTile("Standard", "standard", profile, (v) => _updateProfile(v)),
+                        _buildDivider(),
+                        _buildRadioTile("Elderly (65+)", "elderly", profile, (v) => _updateProfile(v)),
+                        _buildDivider(),
+                        _buildRadioTile("Injury-Prone", "injury_prone", profile, (v) => _updateProfile(v)),
+                      ],
+                    );
+                  }
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // ─── SECTION: Preferences ───
+            _buildSectionHeader("Preferences", subtitle: "Customize your experience"),
+            GlassCard(
+              borderRadius: 18,
+              padding: EdgeInsets.zero,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Column(
+                  children: [
+                    _buildSwitchTile(
+                      Icons.notifications_outlined,
+                      "Push Notifications",
+                      _pushNotifications,
+                      (v) => _updateSettingOptimistically(pushNotifications: v),
+                      subtitle: "Reminders and session alerts",
+                    ),
+                    _buildDivider(),
+                    _buildSwitchTile(
+                      Icons.volume_up_outlined,
+                      "Sound Effects",
+                      settingsProvider.soundEffects,
+                      (v) => settingsProvider.setSoundEffects(v),
+                      subtitle: "Background music during sessions",
+                    ),
+
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // ─── SECTION: Detection ───
+            _buildSectionHeader("Detection", subtitle: "Camera and pose detection settings"),
+            GlassCard(
+              borderRadius: 18,
+              padding: EdgeInsets.zero,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Column(
+                  children: [
+                    _buildNavTile(Icons.camera_alt_outlined, "Camera Quality", settingsProvider.cameraQuality, _showCameraQualityBottomSheet),
+
+                    _buildDivider(),
+                    _buildNavTile(Icons.speed_outlined, "Detection Speed", settingsProvider.detectionSpeed, _showDetectionSpeedBottomSheet),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // ─── SECTION: About ───
+            _buildSectionHeader("About", subtitle: "App info"),
+            GlassCard(
+              borderRadius: 18,
+              padding: EdgeInsets.zero,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: ListTile(
+                  leading: _buildLeadingIcon(Icons.info_outline),
+                  title: Text(
+                    "Version",
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.kNavy,
+                    ),
+                  ),
+                  trailing: Text(
+                    "1.0.0",
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.kNavy.withOpacity(0.65),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -471,6 +430,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ─── SESSION HISTORY SECTION ───
+  // ignore: unused_element
+  Future<void> _loadMoreSessions() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userId = authProvider.user?.id;
+    if (userId == null) return;
+    final nextPage = _currentPage + 1;
+    final total = _sessionMeta?.pages ?? 1;
+    if (nextPage > total) return;
+
+    try {
+      final res = await _analyticsService.fetchUserSessions(userId, page: nextPage);
+      if (mounted) {
+        setState(() {
+          _sessions.addAll(res.sessions);
+          _sessionMeta = res.meta;
+          _currentPage = nextPage;
+        });
+      }
+    } catch (_) {}
+  }
+
   // ignore: unused_element
   Widget _buildSessionHistorySection() {
     if (_isLoadingSessions) {
@@ -633,207 +613,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ─── ACTION METHODS ───
 
-  Future<void> _launchURL(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open link. Please try again later.')),
-        );
-      }
-    }
-  }
-
-  void _showChangePasswordDialog() {
-    final formKey = GlobalKey<FormState>();
-    final currentCtrl = TextEditingController();
-    final newCtrl = TextEditingController();
-    final confirmCtrl = TextEditingController();
-    bool obscureCurrent = true;
-    bool obscureNew = true;
-    bool obscureConfirm = true;
-    bool isLoading = false;
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Row(
-            children: [
-              Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.kPrimary.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.lock_outline, color: AppColors.kPrimary, size: 20),
-              ),
-              const SizedBox(width: 10),
-              Text('Change Password',
-                style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.kNavy),
-              ),
-            ],
-          ),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: currentCtrl,
-                  obscureText: obscureCurrent,
-                  decoration: InputDecoration(
-                    labelText: 'Current Password',
-                    prefixIcon: const Icon(Icons.lock_outline, size: 18),
-                    suffixIcon: IconButton(
-                      icon: Icon(obscureCurrent ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 18),
-                      onPressed: () => setDialogState(() => obscureCurrent = !obscureCurrent),
-                    ),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  ),
-                  validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: newCtrl,
-                  obscureText: obscureNew,
-                  decoration: InputDecoration(
-                    labelText: 'New Password',
-                    prefixIcon: const Icon(Icons.lock_outline, size: 18),
-                    suffixIcon: IconButton(
-                      icon: Icon(obscureNew ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 18),
-                      onPressed: () => setDialogState(() => obscureNew = !obscureNew),
-                    ),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  ),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Required';
-                    if (v.length < 6) return 'At least 6 characters';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: confirmCtrl,
-                  obscureText: obscureConfirm,
-                  decoration: InputDecoration(
-                    labelText: 'Confirm New Password',
-                    prefixIcon: const Icon(Icons.lock_outline, size: 18),
-                    suffixIcon: IconButton(
-                      icon: Icon(obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 18),
-                      onPressed: () => setDialogState(() => obscureConfirm = !obscureConfirm),
-                    ),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  ),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Required';
-                    if (v != newCtrl.text) return 'Passwords do not match';
-                    return null;
-                  },
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Cancel', style: GoogleFonts.poppins(color: AppColors.kNavy.withOpacity(0.6))),
-            ),
-            ElevatedButton(
-              onPressed: isLoading ? null : () async {
-                if (!formKey.currentState!.validate()) return;
-                setDialogState(() => isLoading = true);
-                final messenger = ScaffoldMessenger.of(this.context);
-                await Future.delayed(const Duration(seconds: 1)); // Simulate API call
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Row(children: [
-                        const Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
-                        const SizedBox(width: 8),
-                        Text('Password updated successfully!', style: GoogleFonts.poppins(fontSize: 13)),
-                      ]),
-                      backgroundColor: Colors.green,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.kPrimary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: isLoading
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : Text('Update', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showLanguageBottomSheet() {
-    final languages = ['English', 'Spanish', 'French', 'German', 'Arabic', 'Hindi', 'Japanese', 'Portuguese'];
-    final settingsProvider = context.read<SettingsProvider>();
-
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setSheetState) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40, height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text('Select Language',
-                  style: GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.kNavy),
-                ),
-                const SizedBox(height: 12),
-                ...languages.map((lang) => ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                  title: Text(lang, style: GoogleFonts.poppins(fontSize: 14, color: AppColors.kNavy)),
-                  leading: Icon(
-                    Icons.language,
-                    color: settingsProvider.language == lang ? AppColors.kPrimary : AppColors.kNavy.withOpacity(0.4),
-                  ),
-                  trailing: settingsProvider.language == lang
-                      ? const Icon(Icons.check_circle, color: AppColors.kPrimary, size: 20)
-                      : null,
-                  onTap: () {
-                    settingsProvider.setLanguage(lang);
-                    Navigator.pop(context);
-                  },
-                )),
-                const SizedBox(height: 8),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
 
   void _showCameraQualityBottomSheet() {
     final qualities = ['HD 720p', 'HD 1080p', '4K Ultra HD'];
@@ -964,16 +743,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ─── SHARED HELPERS ───
-  Widget _buildSectionHeader(String label) {
+  Widget _buildSectionHeader(String label, {String? subtitle}) {
     return Padding(
       padding: const EdgeInsets.only(left: 4.0, bottom: 8.0),
-      child: Text(
-        label,
-        style: GoogleFonts.poppins(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: AppColors.kNavy.withOpacity(0.65),
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.kNavy.withOpacity(0.65),
+            ),
+          ),
+          if (subtitle != null) ...
+            [
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppColors.kNavy.withOpacity(0.4),
+                ),
+              ),
+            ],
+        ],
       ),
     );
   }
@@ -1017,12 +812,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildRadioTile(String title, String value, String groupValue, ValueChanged<String?> onChanged) {
+    return RadioListTile<String>(
+      title: Text(
+        title,
+        style: GoogleFonts.poppins(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          color: AppColors.kNavy,
+        ),
+      ),
+      value: value,
+      groupValue: groupValue,
+      onChanged: onChanged,
+      activeColor: AppColors.kPrimary,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+    );
+  }
+
   Widget _buildSwitchTile(
     IconData icon,
     String title,
     bool value,
-    ValueChanged<bool> onChanged,
-  ) {
+    ValueChanged<bool> onChanged, {
+    String? subtitle,
+  }) {
     return ListTile(
       leading: _buildLeadingIcon(icon),
       title: Text(
@@ -1033,6 +847,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           color: AppColors.kNavy,
         ),
       ),
+      subtitle: subtitle != null
+          ? Text(subtitle, style: TextStyle(fontSize: 11, color: AppColors.kNavy.withOpacity(0.45)))
+          : null,
       trailing: Switch(
         value: value,
         onChanged: onChanged,
